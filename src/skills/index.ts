@@ -5,7 +5,7 @@ import { z } from 'zod';
 import YAML from 'yaml';
 import { Config } from '../config';
 import { EmbeddingsProvider } from '../embeddings';
-import { SemanticIndex, SearchResult, VectorStore } from '../vector';
+import { SemanticIndex, SearchResult, createVectorStore } from '../vector';
 
 export interface SkillSummary {
   readonly id: string;
@@ -57,8 +57,14 @@ export class SkillService {
     this.config = options.config;
     this.embeddings = options.embeddings;
     this.index =
-      options.index ?? new VectorStore<SkillSummary>({
+      options.index
+      ?? createVectorStore<SkillSummary>({
+        driver: this.config.vectorStore.driver,
         path: this.config.vectorStore.path,
+        collection: this.config.vectorStore.collection,
+        url: this.config.vectorStore.url,
+        apiKey: this.config.vectorStore.apiKey,
+        dimensions: this.config.vectorStore.dimensions,
         embeddings: this.embeddings
       });
   }

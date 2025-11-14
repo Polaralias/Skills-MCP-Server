@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, beforeEach } from 'vitest';
-import { VectorStore } from '../src/vector';
+import { FileVectorStore } from '../src/vector/file-store';
 import { EmbeddingsProvider } from '../src/embeddings';
 
 const createTempPath = (file: string): string => path.join(mkdtempSync(path.join(tmpdir(), 'vector-test-')), file);
@@ -34,13 +34,13 @@ class CountingEmbeddings implements EmbeddingsProvider {
 
 describe('VectorStore indexing and search', () => {
   let storePath: string;
-  let store: VectorStore;
+  let store: FileVectorStore;
   let embeddings: CountingEmbeddings;
 
   beforeEach(() => {
     storePath = createTempPath('vectors.json');
     embeddings = new CountingEmbeddings();
-    store = new VectorStore({ path: storePath, embeddings });
+    store = new FileVectorStore({ path: storePath, embeddings });
   });
 
   it('indexes new skills and skips unchanged hashes', async () => {

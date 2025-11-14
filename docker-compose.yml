@@ -1,20 +1,40 @@
 version: '3.9'
 
 services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+
   skills-mcp:
     build:
       context: .
       dockerfile: docker/Dockerfile
+    depends_on:
+      - qdrant
     environment:
       NODE_ENV: production
       PORT: 3000
       SKILLS_DIRECTORIES: /app/skills/public,/app/skills/private
       PRIVATE_SKILLS_DIR: /app/skills/private
-      VECTOR_STORE_PATH: /app/data/vector-store.json
+      PRIVATE_SKILLS_ENABLED: 'false'
+      VECTOR_STORE_DRIVER: qdrant
+      VECTOR_STORE_URL: http://qdrant:6333
+      VECTOR_STORE_COLLECTION: skills
+      EMBEDDINGS_PROVIDER: openai
+      EMBEDDINGS_MODEL: text-embedding-3-small
+      EMBEDDINGS_DIMENSIONS: 1536
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     volumes:
       - ./skills/public:/app/skills/public
       - ./skills/private:/app/skills/private
-      - ./.data:/app/data
+      - skills_mcp_index:/app/.data
     ports:
       - "3000:3000"
-    command: ["node", "./dist/server/index.js"]
+
+volumes:
+  qdrant_data:
+  skills_mcp_index:

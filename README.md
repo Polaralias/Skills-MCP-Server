@@ -62,10 +62,14 @@ All runtime configuration flows through environment variables parsed in `src/con
 | `PRIVATE_SKILLS_GIT_URL` | Git URL to clone when private skills are enabled. | — |
 | `PRIVATE_SKILLS_GIT_BRANCH` | Branch name used for the private checkout. | `main` |
 | `PRIVATE_SKILLS_DIR` | Local directory where the private repository is cloned. | `<repo>/private-skills` |
-| `VECTOR_STORE_PATH` | Location of the persisted semantic index. | `.data/vector-store.json` |
+| `VECTOR_STORE_DRIVER` | Backend for semantic storage (`file` or `qdrant`). | `file` |
+| `VECTOR_STORE_PATH` | Location of the persisted semantic index when using the file driver. | `.data/vector-store.json` |
+| `VECTOR_STORE_URL` | Base URL of the Qdrant service when `VECTOR_STORE_DRIVER=qdrant`. | — |
+| `VECTOR_STORE_COLLECTION` | Qdrant collection that stores skill embeddings. | `skills` |
+| `VECTOR_STORE_API_KEY` | Optional API key for secured Qdrant deployments. | — |
 | `EMBEDDINGS_PROVIDER` | Embeddings provider name (`local` or `openai`). | `local` |
 | `EMBEDDINGS_MODEL` | Embeddings model identifier for the selected provider. | `text-embedding-3-small` |
-| `EMBEDDINGS_DIMENSIONS` | Optional embedding dimensionality override. | — |
+| `EMBEDDINGS_DIMENSIONS` | Embedding dimensionality. Required for Qdrant deployments. | — |
 | `OPENAI_API_KEY` | API key used when `EMBEDDINGS_PROVIDER=openai`. | — |
 | `OPENAI_BASE_URL` | Optional custom base URL for OpenAI-compatible providers. | — |
 
@@ -167,30 +171,50 @@ docker run --rm -it \
   skills-mcp-server
 ```
 
-For longer-lived setups, create a `docker-compose.yml` that reuses the same volume strategy:
+For longer-lived setups, create a `docker-compose.yml` that provisions Qdrant alongside the Skills MCP server:
 
 ```yaml
 services:
-  skills:
-    image: skills-mcp-server
-    build: .
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+
+  skills-mcp:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    depends_on:
+      - qdrant
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      SKILLS_DIRECTORIES: /app/skills/public,/app/skills/private
+      PRIVATE_SKILLS_ENABLED: "false"
+      PRIVATE_SKILLS_DIR: /app/skills/private
+      VECTOR_STORE_DRIVER: qdrant
+      VECTOR_STORE_URL: http://qdrant:6333
+      VECTOR_STORE_COLLECTION: skills
+      EMBEDDINGS_PROVIDER: openai
+      EMBEDDINGS_MODEL: text-embedding-3-small
+      EMBEDDINGS_DIMENSIONS: 1536
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      - ./skills/public:/app/skills/public
+      - ./skills/private:/app/skills/private
+      - skills_mcp_index:/app/.data
     ports:
       - "3000:3000"
-    environment:
-      PORT: 3000
-      SKILLS_DIRECTORIES: /data/skills
-      PRIVATE_SKILLS_ENABLED: "true"
-      PRIVATE_SKILLS_GIT_URL: git@github.com:your-org/private-skills.git
-      PRIVATE_SKILLS_DIR: /data/private-skills
-    volumes:
-      - ./skills:/data/skills:ro
-      - ./private-skills:/data/private-skills
-      - skills_mcp_data:/app/.data
+
 volumes:
-  skills_mcp_data:
+  qdrant_data:
+  skills_mcp_index:
 ```
 
-The `.data` directory stores the vector index (`VECTOR_STORE_PATH`), so mounting it as a named volume preserves embeddings between container restarts. Mount your local public and private skills directories to keep them editable without rebuilding the image. The container requires `git` and SSH credentials when private refresh is enabled; bake them into the image or mount them via secrets as appropriate.
+When using the file-based store (`VECTOR_STORE_DRIVER=file`), mount a persistent volume at the path specified by `VECTOR_STORE_PATH`. Mount your local public and private skill directories to keep them editable without rebuilding. The container requires `git` and appropriate credentials when private refresh is enabled; bake them into the image or mount them via secrets as appropriate.
 
 ## Smithery integration and MCP tooling
 
