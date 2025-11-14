@@ -1,0 +1,47 @@
+{
+  "name": "skills-mcp-server",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for discovering and loading skills",
+  "type": "module",
+  "main": "dist/server/index.js",
+  "exports": {
+    ".": "./dist/server/index.js",
+    "./cli": "./dist/scripts/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "lint": "eslint \"{src,scripts,tests}/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "dev": "vitest",
+    "cli": "tsx scripts/cli.ts"
+  },
+  "keywords": [
+    "mcp",
+    "skills",
+    "embeddings"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.22.0",
+    "yaml": "^2.8.1",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@typescript-eslint/eslint-plugin": "^8.46.4",
+    "@typescript-eslint/parser": "^8.46.4",
+    "eslint": "^9.39.1",
+    "ts-node": "^10.9.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.19.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.8"
+  }
+}
