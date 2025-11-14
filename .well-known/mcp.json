@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "skills": {
+      "displayName": "Skills MCP Server",
+      "description": "Provides semantic search, loading, and refresh tools for skill repositories.",
+      "command": [
+        "node",
+        "./dist/server/index.js"
+      ],
+      "env": {}
+    }
+  }
+}
