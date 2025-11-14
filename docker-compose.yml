@@ -1,0 +1,20 @@
+version: '3.9'
+
+services:
+  skills-mcp:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      SKILLS_DIRECTORIES: /app/skills/public,/app/skills/private
+      PRIVATE_SKILLS_DIR: /app/skills/private
+      VECTOR_STORE_PATH: /app/data/vector-store.json
+    volumes:
+      - ./skills/public:/app/skills/public
+      - ./skills/private:/app/skills/private
+      - ./.data:/app/data
+    ports:
+      - "3000:3000"
+    command: ["node", "./dist/server/index.js"]
