@@ -15,7 +15,12 @@ export interface Config {
     };
   };
   readonly vectorStore: {
+    readonly driver: 'file' | 'qdrant';
     readonly path: string;
+    readonly url?: string;
+    readonly apiKey?: string;
+    readonly collection: string;
+    readonly dimensions?: number;
   };
   readonly embeddings: {
     readonly provider: string;
@@ -47,6 +52,10 @@ const envSchema = z.object({
   PRIVATE_SKILLS_GIT_BRANCH: z.string().optional().default('main'),
   PRIVATE_SKILLS_DIR: z.string().optional(),
   VECTOR_STORE_PATH: z.string().optional().default(path.join('.data', 'vector-store.json')),
+  VECTOR_STORE_DRIVER: z.string().optional().default('file'),
+  VECTOR_STORE_URL: z.string().optional(),
+  VECTOR_STORE_COLLECTION: z.string().optional(),
+  VECTOR_STORE_API_KEY: z.string().optional(),
   EMBEDDINGS_PROVIDER: z.string().optional().default('local'),
   EMBEDDINGS_MODEL: z.string().optional().default('text-embedding-3-small'),
   EMBEDDINGS_DIMENSIONS: z
@@ -95,7 +104,21 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => {
     throw new Error('OPENAI_API_KEY is required when EMBEDDINGS_PROVIDER=openai');
   }
 
+  const vectorStoreDriver = parsed.VECTOR_STORE_DRIVER.toLowerCase() as 'file' | 'qdrant';
   const vectorStorePath = parsed.VECTOR_STORE_PATH ?? path.join('.data', 'vector-store.json');
+  const vectorStoreCollection = parsed.VECTOR_STORE_COLLECTION ?? 'skills';
+
+  if (vectorStoreDriver === 'qdrant') {
+    if (!parsed.VECTOR_STORE_URL) {
+      throw new Error('VECTOR_STORE_URL is required when VECTOR_STORE_DRIVER=qdrant');
+    }
+    if (!vectorStoreCollection) {
+      throw new Error('VECTOR_STORE_COLLECTION is required when VECTOR_STORE_DRIVER=qdrant');
+    }
+    if (!parsed.EMBEDDINGS_DIMENSIONS) {
+      throw new Error('EMBEDDINGS_DIMENSIONS is required when VECTOR_STORE_DRIVER=qdrant');
+    }
+  }
 
   return {
     nodeEnv: parsed.NODE_ENV,
@@ -112,7 +135,12 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => {
       }
     },
     vectorStore: {
-      path: vectorStorePath
+      driver: vectorStoreDriver,
+      path: vectorStorePath,
+      url: parsed.VECTOR_STORE_URL,
+      apiKey: parsed.VECTOR_STORE_API_KEY,
+      collection: vectorStoreCollection,
+      dimensions: parsed.EMBEDDINGS_DIMENSIONS
     },
     embeddings: {
       provider,
