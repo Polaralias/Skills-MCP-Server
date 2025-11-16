@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import { SkillService, LoadedSkill, RefreshResult, SkillSummary } from '../skills';
 import { SearchResult } from '../vector';
 
@@ -13,17 +12,8 @@ interface SkillSearchResponse {
   readonly results: Array<SearchResult<SkillSummary>>;
 }
 
-const searchArgsSchema = z.object({
-  query: z.string(),
-  limit: z.number().int().positive().max(50).optional()
-}).strict();
-
-const loadArgsSchema = z.object({
-  id: z.string()
-}).strict();
-
-export const buildTools = (skillService: SkillService): Array<Tool<unknown, unknown>> => {
-  const searchTool: Tool<unknown, SkillSearchResponse> = {
+export const buildTools = (skillService: SkillService): Array<Tool> => {
+  const searchTool: Tool<{ query: string; limit?: number }, SkillSearchResponse> = {
     name: 'skill-search',
     description: 'Search the indexed skills by semantic similarity.',
     schema: {
@@ -40,13 +30,12 @@ export const buildTools = (skillService: SkillService): Array<Tool<unknown, unkn
       additionalProperties: false
     },
     handler: async (input) => {
-      const { query, limit } = searchArgsSchema.parse(input);
-      const results = await skillService.searchSkills(query, limit);
+      const results = await skillService.searchSkills(input.query, input.limit);
       return { results } satisfies SkillSearchResponse;
     }
   };
 
-  const loadTool: Tool<unknown, LoadedSkill> = {
+  const loadTool: Tool<{ id: string }, LoadedSkill> = {
     name: 'skill-load',
     description: 'Load the metadata and content for a specific skill.',
     schema: {
@@ -57,13 +46,10 @@ export const buildTools = (skillService: SkillService): Array<Tool<unknown, unkn
       required: ['id'],
       additionalProperties: false
     },
-    handler: async (input) => {
-      const { id } = loadArgsSchema.parse(input);
-      return skillService.loadSkill(id);
-    }
+    handler: async (input) => skillService.loadSkill(input.id)
   };
 
-  const refreshTool: Tool<unknown, RefreshResult> = {
+  const refreshTool: Tool<Record<string, never>, RefreshResult> = {
     name: 'skill-refresh',
     description: 'Refresh private skill repositories if configured.',
     schema: {

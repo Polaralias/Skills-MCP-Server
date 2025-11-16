@@ -1,7 +1,7 @@
 import process from 'node:process';
 import { loadConfig } from '../src/config';
 import { createEmbeddingsProvider } from '../src/embeddings';
-import { createVectorStore } from '../src/vector';
+import { VectorStore } from '../src/vector';
 import { SkillService, SkillSummary } from '../src/skills';
 
 const usage = `Usage:
@@ -19,15 +19,7 @@ const main = async (): Promise<void> => {
 
   const config = loadConfig();
   const embeddings = createEmbeddingsProvider(config);
-  const vectorStore = createVectorStore<SkillSummary>({
-    driver: config.vectorStore.driver,
-    path: config.vectorStore.path,
-    collection: config.vectorStore.collection,
-    url: config.vectorStore.url,
-    apiKey: config.vectorStore.apiKey,
-    dimensions: config.vectorStore.dimensions,
-    embeddings
-  });
+  const vectorStore = new VectorStore<SkillSummary>({ path: config.vectorStore.path, embeddings });
   const service = new SkillService({ config, embeddings, index: vectorStore });
 
   switch (command) {
