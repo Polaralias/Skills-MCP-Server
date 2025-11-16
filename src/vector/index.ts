@@ -1,55 +1,200 @@
-import { FileVectorStore, FileVectorStoreOptions, cosineSimilarity } from './file-store';
-import { QdrantVectorStore, QdrantVectorStoreOptions } from './qdrant-store';
-import type { SemanticIndex, VectorStoreBaseOptions } from './types';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { EmbeddingsProvider } from '../embeddings';
 
-export type VectorStoreDriver = 'file' | 'qdrant';
-
-export interface CreateVectorStoreOptions<TMetadata> extends VectorStoreBaseOptions<TMetadata> {
-  readonly driver: VectorStoreDriver;
-  readonly path?: string;
-  readonly collection?: string;
-  readonly url?: string;
-  readonly apiKey?: string;
-  readonly dimensions?: number;
-  readonly client?: QdrantVectorStoreOptions<TMetadata>['client'];
+export interface IndexDocument<TMetadata = unknown> {
+  readonly id: string;
+  readonly text: string;
+  readonly metadata?: TMetadata;
 }
 
-export const createVectorStore = <TMetadata>(
-  options: CreateVectorStoreOptions<TMetadata>
-): SemanticIndex<TMetadata> => {
-  if (options.driver === 'file') {
-    if (!options.path) {
-      throw new Error('File vector store requires a path');
-    }
-    const fileOptions: FileVectorStoreOptions<TMetadata> = {
-      path: options.path,
-      embeddings: options.embeddings,
-      metadataSerializer: options.metadataSerializer
-    };
-    return new FileVectorStore(fileOptions);
+export interface SearchResult<TMetadata = unknown> {
+  readonly skillId: string;
+  readonly score: number;
+  readonly metadata?: TMetadata;
+}
+
+export interface SemanticIndex<TMetadata = unknown> {
+  indexSkills(documents: Array<IndexDocument<TMetadata>>): Promise<void>;
+  search(query: string, options?: { limit?: number }): Promise<Array<SearchResult<TMetadata>>>;
+}
+
+interface VectorStoreEntry<TMetadata> {
+  readonly id: string;
+  readonly hash: string;
+  readonly embedding: number[];
+  readonly metadata?: TMetadata;
+}
+
+interface VectorStoreData<TMetadata> {
+  version: number;
+  entries: Array<VectorStoreEntry<TMetadata>>;
+}
+
+interface VectorStoreOptions<TMetadata> {
+  readonly path: string;
+  readonly embeddings: EmbeddingsProvider;
+  readonly metadataSerializer?: (metadata: TMetadata | undefined) => TMetadata | undefined;
+}
+
+export class VectorStore<TMetadata = unknown> implements SemanticIndex<TMetadata> {
+  private readonly filePath: string;
+  private readonly embeddings: EmbeddingsProvider;
+  private readonly metadataSerializer?: (metadata: TMetadata | undefined) => TMetadata | undefined;
+  private data?: VectorStoreData<TMetadata>;
+
+  constructor(options: VectorStoreOptions<TMetadata>) {
+    this.filePath = options.path;
+    this.embeddings = options.embeddings;
+    this.metadataSerializer = options.metadataSerializer;
   }
 
-  if (options.driver === 'qdrant') {
-    if (!options.collection) {
-      throw new Error('Qdrant vector store requires a collection name');
+  public async indexSkills(documents: Array<IndexDocument<TMetadata>>): Promise<void> {
+    if (documents.length === 0) {
+      return;
     }
-    if (!options.dimensions) {
-      throw new Error('Qdrant vector store requires embedding dimensions');
+
+    const store = await this.load();
+    const toEmbed: Array<{ index: number; document: IndexDocument<TMetadata>; hash: string }>
+      = [];
+
+    for (const document of documents) {
+      const hash = createHash(document.text);
+      const existingIndex = store.entries.findIndex((entry) => entry.id === document.id);
+      const metadata = this.metadataSerializer
+        ? this.metadataSerializer(document.metadata)
+        : document.metadata;
+
+      if (existingIndex >= 0) {
+        const existing = store.entries[existingIndex];
+        if (existing.hash !== hash) {
+          toEmbed.push({ index: existingIndex, document, hash });
+        } else if (metadata !== existing.metadata) {
+          store.entries[existingIndex] = {
+            ...existing,
+            metadata
+          };
+        }
+      } else {
+        toEmbed.push({ index: -1, document, hash });
+      }
     }
-    const qdrantOptions: QdrantVectorStoreOptions<TMetadata> = {
-      collection: options.collection,
-      dimensions: options.dimensions,
-      embeddings: options.embeddings,
-      metadataSerializer: options.metadataSerializer,
-      url: options.url,
-      apiKey: options.apiKey,
-      client: options.client
-    };
-    return new QdrantVectorStore(qdrantOptions);
+
+    if (toEmbed.length === 0) {
+      await this.save(store);
+      return;
+    }
+
+    const embeddings = await this.embeddings.embed(toEmbed.map((item) => item.document.text));
+
+    toEmbed.forEach((item, position) => {
+      const embedding = embeddings[position];
+      if (!embedding || embedding.length === 0) {
+        throw new Error('Embedding provider returned an empty embedding');
+      }
+      const serializedMetadata = this.metadataSerializer
+        ? this.metadataSerializer(item.document.metadata)
+        : item.document.metadata;
+      const entry: VectorStoreEntry<TMetadata> = {
+        id: item.document.id,
+        hash: item.hash,
+        embedding,
+        metadata: serializedMetadata
+      };
+      if (item.index >= 0) {
+        store.entries[item.index] = entry;
+      } else {
+        store.entries.push(entry);
+      }
+    });
+
+    await this.save(store);
   }
 
-  throw new Error(`Unsupported vector store driver: ${options.driver}`);
+  public async search(
+    query: string,
+    options: { limit?: number } = {}
+  ): Promise<Array<SearchResult<TMetadata>>> {
+    const store = await this.load();
+    if (store.entries.length === 0) {
+      return [];
+    }
+
+    const [queryVector] = await this.embeddings.embed([query]);
+    if (!queryVector || queryVector.length === 0) {
+      return [];
+    }
+
+    const queryMagnitude = magnitude(queryVector);
+    if (queryMagnitude === 0) {
+      return [];
+    }
+
+    const results = store.entries
+      .map((entry) => {
+        const score = cosineSimilarity(queryVector, queryMagnitude, entry.embedding);
+        return {
+          skillId: entry.id,
+          score,
+          metadata: entry.metadata
+        } satisfies SearchResult<TMetadata>;
+      })
+      .filter((result) => Number.isFinite(result.score) && result.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    const limit = options.limit ?? results.length;
+    return results.slice(0, limit);
+  }
+
+  private async load(): Promise<VectorStoreData<TMetadata>> {
+    if (this.data) {
+      return this.data;
+    }
+    try {
+      const buffer = await fs.readFile(this.filePath, 'utf8');
+      const parsed = JSON.parse(buffer) as VectorStoreData<TMetadata>;
+      this.data = parsed;
+      return parsed;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        const initial: VectorStoreData<TMetadata> = { version: 1, entries: [] };
+        this.data = initial;
+        return initial;
+      }
+      throw error;
+    }
+  }
+
+  private async save(data: VectorStoreData<TMetadata>): Promise<void> {
+    this.data = data;
+    const directory = path.dirname(this.filePath);
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(this.filePath, JSON.stringify(data, null, 2), 'utf8');
+  }
+}
+
+const createHash = (input: string): string =>
+  crypto.createHash('sha256').update(input).digest('hex');
+
+const magnitude = (vector: number[]): number => {
+  return Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
 };
 
-export type { IndexDocument, MetadataSerializer, SearchResult, SemanticIndex, VectorStoreBaseOptions } from './types';
-export { FileVectorStore, FileVectorStoreOptions, QdrantVectorStore, QdrantVectorStoreOptions, cosineSimilarity };
+const cosineSimilarity = (
+  queryVector: number[],
+  queryMagnitude: number,
+  documentVector: number[]
+): number => {
+  const documentMagnitude = magnitude(documentVector);
+  if (documentMagnitude === 0) {
+    return 0;
+  }
+  const dot = queryVector.reduce((sum, value, index) => {
+    const documentValue = documentVector[index] ?? 0;
+    return sum + value * documentValue;
+  }, 0);
+  return dot / (queryMagnitude * documentMagnitude);
+};
+
+export { cosineSimilarity };

@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1.6
 
 FROM node:20-alpine AS base
-RUN apk add --no-cache git
 WORKDIR /app
 
 FROM base AS deps
@@ -24,6 +23,6 @@ COPY --from=production-deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/.well-known ./.well-known
-RUN mkdir -p /app/skills/public /app/skills/private /app/.data
+RUN mkdir -p /app/skills/public /app/skills/private /app/data
 EXPOSE 3000
 CMD ["node", "./dist/server/index.js"]

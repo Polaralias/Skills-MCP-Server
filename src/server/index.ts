@@ -5,12 +5,12 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio';
 import { loadConfig, Config } from '../config';
 import { createEmbeddingsProvider, EmbeddingsProvider } from '../embeddings';
 import { SkillService, SkillSummary } from '../skills';
-import { SemanticIndex, createVectorStore } from '../vector';
+import { VectorStore } from '../vector';
 
 export interface ServerContext {
   readonly config: Config;
   readonly embeddings: EmbeddingsProvider;
-  readonly vectorStore: SemanticIndex<SkillSummary>;
+  readonly vectorStore: VectorStore<SkillSummary>;
   readonly skillService: SkillService;
   readonly server: McpServer;
 }
@@ -22,13 +22,8 @@ const SERVER_INFO = {
 
 export const createServer = (config: Config = loadConfig()): ServerContext => {
   const embeddings = createEmbeddingsProvider(config);
-  const vectorStore = createVectorStore<SkillSummary>({
-    driver: config.vectorStore.driver,
+  const vectorStore = new VectorStore<SkillSummary>({
     path: config.vectorStore.path,
-    collection: config.vectorStore.collection,
-    url: config.vectorStore.url,
-    apiKey: config.vectorStore.apiKey,
-    dimensions: config.vectorStore.dimensions,
     embeddings
   });
   const skillService = new SkillService({ config, embeddings, index: vectorStore });
@@ -41,30 +36,27 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
     }
   });
 
-  const searchArgsSchema = z
-    .object({
-      query: z.string().describe('Search query to match against skill descriptions and content.'),
-      limit: z.number().int().positive().max(50).optional()
-    })
-    .strict();
-  const loadArgsSchema = z
-    .object({
-      id: z.string().describe('Identifier of the skill directory to load.')
-    })
-    .strict();
-  const refreshArgsSchema = z.object({}).strict();
+  const searchSchema = z.object({
+    query: z.string().describe('Search query to match against skill descriptions and content.'),
+    limit: z.number().int().positive().max(50).optional()
+  });
 
   server.registerTool(
     'skill-search',
     {
-      description: 'Search for skills using semantic similarity.'
+      description: 'Search for skills using semantic similarity.',
+      inputSchema: searchSchema
     },
-    async (args: unknown) => {
-      const parsed = searchArgsSchema.parse(args);
-      const results = await skillService.searchSkills(parsed.query, parsed.limit ?? undefined);
+    async ({ query, limit }) => {
+      const results = await skillService.searchSkills(query, limit);
       return {
-        content: [],
-        structuredContent: { results } as Record<string, unknown>
+        content: [
+          {
+            type: 'json',
+            json: { results }
+          }
+        ],
+        structuredContent: { results }
       };
     }
   );
@@ -72,14 +64,21 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
   server.registerTool(
     'skill-load',
     {
-      description: 'Load a skill by identifier.'
+      description: 'Load a skill by identifier.',
+      inputSchema: z.object({
+        id: z.string().describe('Identifier of the skill directory to load.')
+      })
     },
-    async (args: unknown) => {
-      const parsed = loadArgsSchema.parse(args);
-      const skill = await skillService.loadSkill(parsed.id);
+    async ({ id }) => {
+      const skill = await skillService.loadSkill(id);
       return {
-        content: [],
-        structuredContent: skill as unknown as Record<string, unknown>
+        content: [
+          {
+            type: 'json',
+            json: skill
+          }
+        ],
+        structuredContent: skill
       };
     }
   );
@@ -89,12 +88,16 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
     {
       description: 'Refresh private skill repositories if enabled.'
     },
-    async (args: unknown) => {
-      refreshArgsSchema.parse(args);
+    async () => {
       const result = await skillService.refreshPrivateRepository();
       return {
-        content: [],
-        structuredContent: result as unknown as Record<string, unknown>
+        content: [
+          {
+            type: 'json',
+            json: result
+          }
+        ],
+        structuredContent: result
       };
     }
   );

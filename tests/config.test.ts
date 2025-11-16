@@ -27,16 +27,13 @@ describe('config loader', () => {
     expect(config.port).toBe(3000);
     expect(config.skills.directories).toEqual(['skills']);
     expect(config.embeddings.provider).toBe('local');
-    expect(config.vectorStore.driver).toBe('file');
     expect(config.vectorStore.path).toMatch(/vector-store\.json$/);
-    expect(config.vectorStore.collection).toBe('skills');
   });
 
   it('parses comma separated skill directories and numeric values', () => {
     process.env.SKILLS_DIRECTORIES = 'one,two , three';
     process.env.PORT = '4123';
     process.env.VECTOR_STORE_PATH = './data/vectors.json';
-    process.env.VECTOR_STORE_DRIVER = 'file';
 
     const config = loadConfig();
 
@@ -55,22 +52,6 @@ describe('config loader', () => {
     process.env.EMBEDDINGS_PROVIDER = 'openai';
 
     expect(() => loadConfig()).toThrowError(/OPENAI_API_KEY/i);
-  });
-
-  it('requires vector store URL and embedding dimensions when qdrant driver is selected', () => {
-    process.env.VECTOR_STORE_DRIVER = 'qdrant';
-
-    expect(() => loadConfig()).toThrowError(/VECTOR_STORE_URL/i);
-
-    process.env.VECTOR_STORE_URL = 'http://qdrant:6333';
-    expect(() => loadConfig()).toThrowError(/EMBEDDINGS_DIMENSIONS/i);
-
-    process.env.EMBEDDINGS_DIMENSIONS = '1536';
-    process.env.VECTOR_STORE_COLLECTION = 'custom-collection';
-
-    const config = loadConfig();
-    expect(config.vectorStore.collection).toBe('custom-collection');
-    expect(config.vectorStore.driver).toBe('qdrant');
   });
 
   it('returns private repository configuration when provided', () => {
