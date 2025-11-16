@@ -14,16 +14,6 @@ export interface Config {
       readonly directory: string;
     };
   };
-  readonly vectorStore: {
-    readonly path: string;
-  };
-  readonly embeddings: {
-    readonly provider: string;
-    readonly model: string;
-    readonly dimensions?: number;
-    readonly apiKey?: string;
-    readonly baseUrl?: string;
-  };
 }
 
 const booleanSchema = z
@@ -45,17 +35,7 @@ const envSchema = z.object({
   PRIVATE_SKILLS_ENABLED: z.string().optional(),
   PRIVATE_SKILLS_GIT_URL: z.string().optional(),
   PRIVATE_SKILLS_GIT_BRANCH: z.string().optional().default('main'),
-  PRIVATE_SKILLS_DIR: z.string().optional(),
-  VECTOR_STORE_PATH: z.string().optional().default(path.join('.data', 'vector-store.json')),
-  EMBEDDINGS_PROVIDER: z.string().optional().default('local'),
-  EMBEDDINGS_MODEL: z.string().optional().default('text-embedding-3-small'),
-  EMBEDDINGS_DIMENSIONS: z
-    .string()
-    .optional()
-    .transform((value) => (value ? Number.parseInt(value, 10) : undefined))
-    .optional(),
-  OPENAI_API_KEY: z.string().optional(),
-  OPENAI_BASE_URL: z.string().optional()
+  PRIVATE_SKILLS_DIR: z.string().optional()
 });
 
 const DEFAULT_METADATA_FILENAMES = ['skill.json', 'skill.yaml', 'skill.yml'];
@@ -90,13 +70,6 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => {
     throw new Error('PRIVATE_SKILLS_GIT_URL is required when PRIVATE_SKILLS_ENABLED=true');
   }
 
-  const provider = parsed.EMBEDDINGS_PROVIDER;
-  if (provider.toLowerCase() === 'openai' && !parsed.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is required when EMBEDDINGS_PROVIDER=openai');
-  }
-
-  const vectorStorePath = parsed.VECTOR_STORE_PATH ?? path.join('.data', 'vector-store.json');
-
   return {
     nodeEnv: parsed.NODE_ENV,
     port: parsed.PORT,
@@ -110,16 +83,6 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => {
         directory:
           parsed.PRIVATE_SKILLS_DIR ?? path.join(process.cwd(), 'private-skills')
       }
-    },
-    vectorStore: {
-      path: vectorStorePath
-    },
-    embeddings: {
-      provider,
-      model: parsed.EMBEDDINGS_MODEL,
-      dimensions: parsed.EMBEDDINGS_DIMENSIONS,
-      apiKey: parsed.OPENAI_API_KEY,
-      baseUrl: parsed.OPENAI_BASE_URL
     }
   };
 };

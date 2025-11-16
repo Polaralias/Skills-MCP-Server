@@ -4,8 +4,6 @@ import { spawn } from 'node:child_process';
 import { z } from 'zod';
 import YAML from 'yaml';
 import { Config } from '../config';
-import { EmbeddingsProvider } from '../embeddings';
-import { SemanticIndex, SearchResult, VectorStore } from '../vector';
 
 export interface SkillSummary {
   readonly id: string;
@@ -27,10 +25,14 @@ export interface RefreshResult {
   readonly status: 'skipped' | 'cloned' | 'pulled';
 }
 
+export interface SkillSearchResult {
+  readonly skillId: string;
+  readonly score: number;
+  readonly metadata: SkillSummary;
+}
+
 interface SkillServiceOptions {
   readonly config: Config;
-  readonly embeddings: EmbeddingsProvider;
-  readonly index?: SemanticIndex<SkillSummary>;
 }
 
 interface SkillRecord {
@@ -49,18 +51,10 @@ const metadataSchema = z.object({
 
 export class SkillService {
   private readonly config: Config;
-  private readonly embeddings: EmbeddingsProvider;
-  private readonly index: SemanticIndex<SkillSummary>;
   private skillCache?: Map<string, SkillRecord>;
 
   constructor(options: SkillServiceOptions) {
     this.config = options.config;
-    this.embeddings = options.embeddings;
-    this.index =
-      options.index ?? new VectorStore<SkillSummary>({
-        path: this.config.vectorStore.path,
-        embeddings: this.embeddings
-      });
   }
 
   public async discoverSkills(): Promise<SkillSummary[]> {
@@ -90,39 +84,44 @@ export class SkillService {
     };
   }
 
-  public async searchSkills(
-    query: string,
-    limit = 5
-  ): Promise<Array<SearchResult<SkillSummary>>> {
+  public async searchSkills(query: string, limit = 5): Promise<SkillSearchResult[]> {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    const tokens = normalizedQuery.split(/\s+/).filter((token) => token.length > 0);
+    if (tokens.length === 0) {
+      return [];
+    }
+
     const records = await this.scanSkills();
     const documents = await Promise.all(
-      Array.from(records.values()).map(async (record) => {
-        const pieces: string[] = [
-          record.summary.name,
-          record.summary.description,
-          record.summary.tags.join(' ')
-        ];
-        for (const relativePath of record.summary.files) {
-          const filePath = path.join(record.directory, relativePath);
-          try {
-            const data = await fs.readFile(filePath, 'utf8');
-            pieces.push(data);
-          } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-              throw error;
-            }
-          }
-        }
-        return {
-          id: record.summary.id,
-          text: pieces.join('\n\n'),
-          metadata: record.summary
-        };
-      })
+      Array.from(records.values()).map(async (record) => ({
+        record,
+        text: await this.buildSearchDocument(record)
+      }))
     );
 
-    await this.index.indexSkills(documents);
-    return this.index.search(query, { limit });
+    const scored = documents
+      .map(({ record, text }) => ({
+        record,
+        score: this.scoreDocument(tokens, record.summary, text)
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => {
+        if (b.score === a.score) {
+          return a.record.summary.name.localeCompare(b.record.summary.name);
+        }
+        return b.score - a.score;
+      });
+
+    const cappedLimit = Math.max(1, limit ?? 5);
+    return scored.slice(0, cappedLimit).map((entry) => ({
+      skillId: entry.record.summary.id,
+      score: entry.score,
+      metadata: entry.record.summary
+    }));
   }
 
   public async refreshPrivateRepository(): Promise<RefreshResult> {
@@ -232,6 +231,60 @@ export class SkillService {
       version: metadata.version,
       source: isPrivate ? 'private' : 'local'
     };
+  }
+
+  private async buildSearchDocument(record: SkillRecord): Promise<string> {
+    const pieces: string[] = [
+      record.summary.name,
+      record.summary.description,
+      record.summary.tags.join(' ')
+    ];
+
+    for (const relativePath of record.summary.files) {
+      const filePath = path.join(record.directory, relativePath);
+      try {
+        const data = await fs.readFile(filePath, 'utf8');
+        pieces.push(data);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
+      }
+    }
+
+    return pieces.join('\n\n');
+  }
+
+  private scoreDocument(
+    tokens: string[],
+    metadata: SkillSummary,
+    document: string
+  ): number {
+    const haystack = document.toLowerCase();
+    const name = metadata.name.toLowerCase();
+    const description = metadata.description.toLowerCase();
+    const tags = metadata.tags.map((tag) => tag.toLowerCase());
+
+    let score = 0;
+    for (const token of tokens) {
+      if (name.includes(token)) {
+        score += 3;
+      }
+      if (description.includes(token)) {
+        score += 2;
+      }
+      if (tags.some((tag) => tag.includes(token))) {
+        score += 1;
+      }
+
+      let index = haystack.indexOf(token);
+      while (index >= 0) {
+        score += 0.5;
+        index = haystack.indexOf(token, index + token.length);
+      }
+    }
+
+    return score;
   }
 }
 

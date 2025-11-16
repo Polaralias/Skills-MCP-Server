@@ -1,5 +1,10 @@
-import { SkillService, LoadedSkill, RefreshResult, SkillSummary } from '../skills';
-import { SearchResult } from '../vector';
+import {
+  SkillService,
+  LoadedSkill,
+  RefreshResult,
+  SkillSummary,
+  SkillSearchResult
+} from '../skills';
 
 export interface Tool<TInput = unknown, TOutput = unknown> {
   readonly name: string;
@@ -9,13 +14,13 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
 }
 
 interface SkillSearchResponse {
-  readonly results: Array<SearchResult<SkillSummary>>;
+  readonly results: SkillSearchResult[];
 }
 
 export const buildTools = (skillService: SkillService): Array<Tool> => {
   const searchTool: Tool<{ query: string; limit?: number }, SkillSearchResponse> = {
     name: 'skill-search',
-    description: 'Search the indexed skills by semantic similarity.',
+    description: 'Search the indexed skills by keyword relevance.',
     schema: {
       type: 'object',
       properties: {

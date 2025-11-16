@@ -1,6 +1,6 @@
 # Skills MCP Server
 
-The Skills MCP Server is a Model Context Protocol (MCP) service that discovers, indexes, and serves reusable "skills" from local and private repositories. It offers semantic search, skill loading, and repository refresh tooling so MCP-compatible agents can quickly locate the right capabilities.
+The Skills MCP Server is a Model Context Protocol (MCP) service that discovers, indexes, and serves reusable "skills" from local and private repositories. It offers keyword-based search, skill loading, and repository refresh tooling so MCP-compatible agents can quickly locate the right capabilities.
 
 ## Overview
 
@@ -8,20 +8,20 @@ The project provides:
 
 - **Strict TypeScript** compilation, linting, and testing defaults to keep the codebase reliable.
 - **Environment-driven configuration** that is validated with Zod and surfaced to both the server and the manual CLI.
-- **Skill discovery and indexing** against configurable directories containing JSON or YAML metadata, with persistent vector embeddings.
+- **Skill discovery and indexing** against configurable directories containing JSON or YAML metadata, with lightweight keyword-based scoring.
 - **MCP tools** for skill search, load, and private repository refresh that can be consumed by Smithery or any MCP host.
 
 ## Architecture
 
 The repository is organized into focused packages:
 
-- `src/config` parses and validates environment variables (directories, embeddings, vector-store path, private Git settings) and exposes a typed `Config` object used everywhere else.
-- `src/skills` scans configured directories for metadata files (`skill.json`, `skill.yaml`, or `skill.yml`), loads content, manages a persistent semantic index, and optionally clones or pulls a private Git repository when refresh is triggered.
-- `src/vector` and `src/embeddings` provide a pluggable vector store backed by embeddings providers (local hash or OpenAI HTTP) so semantic search can be performed consistently.
+- `src/config` parses and validates environment variables (directories and private Git settings) and exposes a typed `Config` object used everywhere else.
+- `src/skills` scans configured directories for metadata files (`skill.json`, `skill.yaml`, or `skill.yml`), loads content, scores results, and optionally clones or pulls a private Git repository when refresh is triggered.
+- Keyword scoring occurs inside `src/skills`, so no external vector store or embeddings provider is required.
 - `src/tools` defines the MCP tools (`skill-search`, `skill-load`, `skill-refresh`) with JSON Schemas and handlers that wrap the `SkillService` methods.
 - `src/server` wires the SDK server entry point with configured tools for MCP hosts.
 - `scripts/cli.ts` offers a manual CLI that shares the same configuration and services for local validation.
-- `tests/` contains Vitest suites covering configuration parsing, skill scanning, vector indexing, and tool schemas to prevent regressions.
+- `tests/` contains Vitest suites covering configuration parsing, skill scanning, and tool schemas to prevent regressions.
 
 ## Local development setup
 
@@ -62,14 +62,8 @@ All runtime configuration flows through environment variables parsed in `src/con
 | `PRIVATE_SKILLS_GIT_URL` | Git URL to clone when private skills are enabled. | — |
 | `PRIVATE_SKILLS_GIT_BRANCH` | Branch name used for the private checkout. | `main` |
 | `PRIVATE_SKILLS_DIR` | Local directory where the private repository is cloned. | `<repo>/private-skills` |
-| `VECTOR_STORE_PATH` | Location of the persisted semantic index. | `.data/vector-store.json` |
-| `EMBEDDINGS_PROVIDER` | Embeddings provider name (`local` or `openai`). | `local` |
-| `EMBEDDINGS_MODEL` | Embeddings model identifier for the selected provider. | `text-embedding-3-small` |
-| `EMBEDDINGS_DIMENSIONS` | Optional embedding dimensionality override. | — |
-| `OPENAI_API_KEY` | API key used when `EMBEDDINGS_PROVIDER=openai`. | — |
-| `OPENAI_BASE_URL` | Optional custom base URL for OpenAI-compatible providers. | — |
 
-If you enable private skills but omit the Git URL or OpenAI provider without an API key, startup will fail with configuration validation errors, helping you catch misconfigurations early.
+If you enable private skills but omit the Git URL, startup will fail with configuration validation errors, helping you catch misconfigurations early.
 
 ### Starting the server
 
@@ -122,14 +116,14 @@ Run the Vitest suites at any time:
 npm test
 ```
 
-The tests cover configuration parsing, skill discovery, vector indexing, and tool schemas to ensure the server remains stable.
+The tests cover configuration parsing, skill discovery, and tool schemas to ensure the server remains stable.
 
 ## Manual CLI
 
 Use the manual CLI to experiment without launching an MCP client:
 
 ```bash
-# Search for semantically-related skills
+# Search for related skills
 npm run cli -- search "vector search" 5
 
 # Load a specific skill and inspect the returned metadata + file contents
@@ -139,11 +133,11 @@ npm run cli -- load sample-skill
 npm run cli -- refresh
 ```
 
-The CLI prints JSON responses for each command and shares the same configuration, embeddings provider, and vector store implementation as the server.
+The CLI prints JSON responses for each command and shares the same configuration and scoring logic as the server.
 
 ## Docker and Docker Compose
 
-You can containerize the server with the official Node image. The example below builds the project, mounts the skill directories, and persists the vector store:
+You can containerize the server with the official Node image. The example below builds the project and mounts the skill directories:
 
 ```bash
 docker build -t skills-mcp-server \
@@ -163,7 +157,6 @@ docker run --rm -it \
   -e PORT=3000 \
   -e SKILLS_DIRECTORIES=/data/skills \
   -v "$(pwd)/skills:/data/skills" \
-  -v skills_mcp_data:/app/.data \
   skills-mcp-server
 ```
 
@@ -185,12 +178,9 @@ services:
     volumes:
       - ./skills:/data/skills:ro
       - ./private-skills:/data/private-skills
-      - skills_mcp_data:/app/.data
-volumes:
-  skills_mcp_data:
 ```
 
-The `.data` directory stores the vector index (`VECTOR_STORE_PATH`), so mounting it as a named volume preserves embeddings between container restarts. Mount your local public and private skills directories to keep them editable without rebuilding the image. The container requires `git` and SSH credentials when private refresh is enabled; bake them into the image or mount them via secrets as appropriate.
+Mount your local public and private skills directories to keep them editable without rebuilding the image. The container requires `git` and SSH credentials when private refresh is enabled; bake them into the image or mount them via secrets as appropriate.
 
 ## Smithery integration and MCP tooling
 
@@ -269,5 +259,5 @@ All tools accept/return JSON payloads that match the schemas in `src/tools/index
 }
 ```
 
-Smithery displays the JSON responses in its UI, so you can copy-paste the payloads above into manual tool invocations for quick validation. Search responses include semantic similarity scores and the full metadata block, load responses echo the metadata and inline the requested files, and refresh responses indicate whether a clone, pull, or skip occurred.
+Smithery displays the JSON responses in its UI, so you can copy-paste the payloads above into manual tool invocations for quick validation. Search responses include keyword relevance scores and the full metadata block, load responses echo the metadata and inline the requested files, and refresh responses indicate whether a clone, pull, or skip occurred.
 
