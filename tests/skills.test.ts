@@ -5,26 +5,6 @@ import { spawn } from 'node:child_process';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { loadConfig, Config } from '../src/config';
 import { SkillService, SkillSummary } from '../src/skills';
-import { EmbeddingsProvider } from '../src/embeddings';
-import { SemanticIndex, SearchResult } from '../src/vector';
-
-class NoopEmbeddings implements EmbeddingsProvider {
-  async embed(texts: string[]): Promise<number[][]> {
-    return texts.map(() => [0]);
-  }
-}
-
-class RecordingIndex implements SemanticIndex<SkillSummary> {
-  public documents: string[] = [];
-
-  async indexSkills(documents: Array<{ id: string; text: string; metadata?: SkillSummary }>): Promise<void> {
-    this.documents.push(...documents.map((doc) => doc.id));
-  }
-
-  async search(): Promise<SearchResult<SkillSummary>[]> {
-    return [];
-  }
-}
 
 const createTempDir = (): string => mkdtempSync(path.join(tmpdir(), 'skills-test-'));
 
@@ -36,7 +16,6 @@ const writeJson = async (filePath: string, data: unknown): Promise<void> => {
 describe('SkillService filesystem operations', () => {
   let config: Config;
   let service: SkillService;
-  let index: RecordingIndex;
 
   beforeEach(async () => {
     const baseDir = createTempDir();
@@ -69,12 +48,7 @@ describe('SkillService filesystem operations', () => {
     process.env.SKILLS_DIRECTORIES = skillsDir;
 
     config = loadConfig();
-    index = new RecordingIndex();
-    service = new SkillService({
-      config,
-      embeddings: new NoopEmbeddings(),
-      index
-    });
+    service = new SkillService({ config });
   });
 
   it('discovers skills with metadata from JSON and YAML sources', async () => {
@@ -98,11 +72,12 @@ describe('SkillService filesystem operations', () => {
     expect(skill.content['docs/guide.md']).toContain('Beta content');
   });
 
-  it('invokes the semantic index when searching', async () => {
-    await service.searchSkills('alpha');
+  it('returns keyword-ranked search results', async () => {
+    const [result] = await service.searchSkills('second');
 
-    expect(index.documents).toContain('alpha');
-    expect(index.documents).toContain('beta');
+    expect(result).toBeDefined();
+    expect(result?.skillId).toBe('beta');
+    expect(result?.metadata.name).toBe('Beta Skill');
   });
 });
 
@@ -145,11 +120,7 @@ describe('private repository refresh', () => {
     process.env.PRIVATE_SKILLS_DIR = cloneDir;
 
     const config = loadConfig();
-    const service = new SkillService({
-      config,
-      embeddings: new NoopEmbeddings(),
-      index: new RecordingIndex()
-    });
+    const service = new SkillService({ config });
 
     const result = await service.refreshPrivateRepository();
     expect(result.status).toBe('cloned');
@@ -176,11 +147,7 @@ describe('private repository refresh', () => {
     process.env.PRIVATE_SKILLS_DIR = cloneDir;
 
     let config = loadConfig();
-    let service = new SkillService({
-      config,
-      embeddings: new NoopEmbeddings(),
-      index: new RecordingIndex()
-    });
+    let service = new SkillService({ config });
 
     await service.refreshPrivateRepository();
 
@@ -193,11 +160,7 @@ describe('private repository refresh', () => {
     process.env.PRIVATE_SKILLS_GIT_URL = remoteDir;
     process.env.PRIVATE_SKILLS_DIR = cloneDir;
     config = loadConfig();
-    service = new SkillService({
-      config,
-      embeddings: new NoopEmbeddings(),
-      index: new RecordingIndex()
-    });
+    service = new SkillService({ config });
 
     const result = await service.refreshPrivateRepository();
     expect(result.status).toBe('pulled');

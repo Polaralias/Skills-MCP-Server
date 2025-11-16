@@ -3,14 +3,10 @@ import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio';
 import { loadConfig, Config } from '../config';
-import { createEmbeddingsProvider, EmbeddingsProvider } from '../embeddings';
-import { SkillService, SkillSummary } from '../skills';
-import { VectorStore } from '../vector';
+import { SkillService } from '../skills';
 
 export interface ServerContext {
   readonly config: Config;
-  readonly embeddings: EmbeddingsProvider;
-  readonly vectorStore: VectorStore<SkillSummary>;
   readonly skillService: SkillService;
   readonly server: McpServer;
 }
@@ -21,12 +17,7 @@ const SERVER_INFO = {
 } as const;
 
 export const createServer = (config: Config = loadConfig()): ServerContext => {
-  const embeddings = createEmbeddingsProvider(config);
-  const vectorStore = new VectorStore<SkillSummary>({
-    path: config.vectorStore.path,
-    embeddings
-  });
-  const skillService = new SkillService({ config, embeddings, index: vectorStore });
+  const skillService = new SkillService({ config });
 
   const server = new McpServer(SERVER_INFO, {
     capabilities: {
@@ -44,7 +35,7 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
   server.registerTool(
     'skill-search',
     {
-      description: 'Search for skills using semantic similarity.',
+      description: 'Search for skills using keyword relevance.',
       inputSchema: searchSchema
     },
     async ({ query, limit }) => {
@@ -104,8 +95,6 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
 
   return {
     config,
-    embeddings,
-    vectorStore,
     skillService,
     server
   };

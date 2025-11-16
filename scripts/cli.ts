@@ -1,8 +1,6 @@
 import process from 'node:process';
 import { loadConfig } from '../src/config';
-import { createEmbeddingsProvider } from '../src/embeddings';
-import { VectorStore } from '../src/vector';
-import { SkillService, SkillSummary } from '../src/skills';
+import { SkillService } from '../src/skills';
 
 const usage = `Usage:
   npm run cli -- search <query> [limit]
@@ -18,9 +16,7 @@ const main = async (): Promise<void> => {
   }
 
   const config = loadConfig();
-  const embeddings = createEmbeddingsProvider(config);
-  const vectorStore = new VectorStore<SkillSummary>({ path: config.vectorStore.path, embeddings });
-  const service = new SkillService({ config, embeddings, index: vectorStore });
+  const service = new SkillService({ config });
 
   switch (command) {
     case 'search': {
