@@ -2,16 +2,21 @@ version: '3.9'
 
 services:
   skills-mcp:
+    image: skills-mcp-server:latest
     build:
       context: .
       dockerfile: docker/Dockerfile
+    restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 3000
       SKILLS_DIRECTORIES: /app/skills/public,/app/skills/private
+      PRIVATE_SKILLS_ENABLED: ${PRIVATE_SKILLS_ENABLED:-false}
+      PRIVATE_SKILLS_GIT_URL: ${PRIVATE_SKILLS_GIT_URL:-}
+      PRIVATE_SKILLS_GIT_BRANCH: ${PRIVATE_SKILLS_GIT_BRANCH:-main}
       PRIVATE_SKILLS_DIR: /app/skills/private
     volumes:
-      - ./skills/public:/app/skills/public
+      - ./skills/public:/app/skills/public:ro
       - ./skills/private:/app/skills/private
     ports:
       - "3000:3000"
