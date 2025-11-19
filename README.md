@@ -182,6 +182,25 @@ services:
 
 Mount your local public and private skills directories to keep them editable without rebuilding the image. The container requires `git` and SSH credentials when private refresh is enabled; bake them into the image or mount them via secrets as appropriate.
 
+### Docker Compose deployment
+
+The repository ships with a `docker-compose.yml` that is ready for production-style deployments and local file loading. Public and private skills are mounted from the `skills/` directory in the repository so you can edit metadata and supporting files without rebuilding the image.
+
+```bash
+# Ensure the local skills directories exist (they are pre-seeded with .gitkeep files)
+mkdir -p skills/public skills/private
+
+# Optional: configure private repository access
+export PRIVATE_SKILLS_ENABLED=false
+export PRIVATE_SKILLS_GIT_URL=git@github.com:your-org/private-skills.git
+export PRIVATE_SKILLS_GIT_BRANCH=main
+
+# Build and start the service
+docker compose up --build
+```
+
+The compose service exposes port `3000` by default, mounts `skills/public` as read-only for local skill files, and mounts `skills/private` for any cloned private repository. Update the `SKILLS_DIRECTORIES` value in `docker-compose.yml` if you want to point at different directories on the container filesystem.
+
 ## Smithery integration and MCP tooling
 
 Smithery and other MCP hosts discover the server via the `.well-known/mcp.json` manifest, which declares the executable (`node ./dist/server/index.js`) and friendly display name.
