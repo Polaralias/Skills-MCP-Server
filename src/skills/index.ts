@@ -1,6 +1,5 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { z } from 'zod';
 import YAML from 'yaml';
 import { Config } from '../config';
@@ -13,16 +12,12 @@ export interface SkillSummary {
   readonly files: string[];
   readonly repository?: string;
   readonly version?: string;
-  readonly source: 'local' | 'private';
+  readonly source: 'local';
 }
 
 export interface LoadedSkill {
   readonly metadata: SkillSummary;
   readonly content: Record<string, string>;
-}
-
-export interface RefreshResult {
-  readonly status: 'skipped' | 'cloned' | 'pulled';
 }
 
 export interface SkillSearchResult {
@@ -124,37 +119,6 @@ export class SkillService {
     }));
   }
 
-  public async refreshPrivateRepository(): Promise<RefreshResult> {
-    const configuration = this.config.skills.privateRepository;
-    if (!configuration.enabled || !configuration.url) {
-      return { status: 'skipped' };
-    }
-
-    const targetDirectory = path.resolve(configuration.directory);
-    await fs.mkdir(path.dirname(targetDirectory), { recursive: true });
-
-    const exists = await pathExists(targetDirectory);
-
-    if (!exists) {
-      await runGit([
-        'clone',
-        '--branch',
-        configuration.branch,
-        '--single-branch',
-        configuration.url,
-        targetDirectory
-      ]);
-      this.skillCache = undefined;
-      return { status: 'cloned' };
-    }
-
-    await runGit(['-C', targetDirectory, 'fetch', '--all', '--prune']);
-    await runGit(['-C', targetDirectory, 'checkout', configuration.branch]);
-    await runGit(['-C', targetDirectory, 'pull', 'origin', configuration.branch]);
-    this.skillCache = undefined;
-    return { status: 'pulled' };
-  }
-
   private async scanSkills(): Promise<Map<string, SkillRecord>> {
     if (this.skillCache) {
       return this.skillCache;
@@ -218,9 +182,6 @@ export class SkillService {
     metadata: z.infer<typeof metadataSchema>
   ): SkillSummary {
     const files = metadata.files.length > 0 ? metadata.files : ['README.md'];
-    const privateRoot = path.resolve(this.config.skills.privateRepository.directory);
-    const isPrivate = path.resolve(directory).startsWith(privateRoot)
-      && this.config.skills.privateRepository.enabled;
     return {
       id: directoryName,
       name: metadata.name,
@@ -229,7 +190,7 @@ export class SkillService {
       files,
       repository: metadata.repository,
       version: metadata.version,
-      source: isPrivate ? 'private' : 'local'
+      source: 'local'
     };
   }
 
@@ -287,29 +248,3 @@ export class SkillService {
     return score;
   }
 }
-
-const pathExists = async (targetPath: string): Promise<boolean> => {
-  try {
-    await fs.access(targetPath);
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return false;
-    }
-    throw error;
-  }
-};
-
-const runGit = async (args: string[]): Promise<void> => {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn('git', args, { stdio: 'inherit' });
-    child.on('error', reject);
-    child.on('exit', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`git ${args.join(' ')} exited with code ${code}`));
-      }
-    });
-  });
-};

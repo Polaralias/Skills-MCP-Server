@@ -1,10 +1,4 @@
-import {
-  SkillService,
-  LoadedSkill,
-  RefreshResult,
-  SkillSummary,
-  SkillSearchResult
-} from '../skills';
+import { SkillService, LoadedSkill, SkillSummary, SkillSearchResult } from '../skills';
 
 export interface Tool<TInput = unknown, TOutput = unknown> {
   readonly name: string;
@@ -54,16 +48,5 @@ export const buildTools = (skillService: SkillService): Array<Tool> => {
     handler: async (input) => skillService.loadSkill(input.id)
   };
 
-  const refreshTool: Tool<Record<string, never>, RefreshResult> = {
-    name: 'skill-refresh',
-    description: 'Refresh private skill repositories if configured.',
-    schema: {
-      type: 'object',
-      properties: {},
-      additionalProperties: false
-    },
-    handler: async () => skillService.refreshPrivateRepository()
-  };
-
-  return [searchTool, loadTool, refreshTool];
+  return [searchTool, loadTool];
 };

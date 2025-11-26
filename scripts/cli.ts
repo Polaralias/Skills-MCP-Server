@@ -4,8 +4,7 @@ import { SkillService } from '../src/skills';
 
 const usage = `Usage:
   npm run cli -- search <query> [limit]
-  npm run cli -- load <skill-id>
-  npm run cli -- refresh`;
+  npm run cli -- load <skill-id>`;
 
 const main = async (): Promise<void> => {
   const [, , command, ...rest] = process.argv;
@@ -40,11 +39,6 @@ const main = async (): Promise<void> => {
       }
       const skill = await service.loadSkill(id);
       console.log(JSON.stringify(skill, null, 2));
-      break;
-    }
-    case 'refresh': {
-      const result = await service.refreshPrivateRepository();
-      console.log(JSON.stringify(result, null, 2));
       break;
     }
     default:

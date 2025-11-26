@@ -1,6 +1,6 @@
 # Skills MCP Server
 
-The Skills MCP Server is a Model Context Protocol (MCP) service that discovers, indexes, and serves reusable "skills" from local and private repositories. It offers keyword-based search, skill loading, and repository refresh tooling so MCP-compatible agents can quickly locate the right capabilities.
+The Skills MCP Server is a Model Context Protocol (MCP) service that discovers, indexes, and serves reusable "skills" from local directories. It offers keyword-based search and skill loading so MCP-compatible agents can quickly locate the right capabilities.
 
 ## Overview
 
@@ -9,16 +9,16 @@ The project provides:
 - **Strict TypeScript** compilation, linting, and testing defaults to keep the codebase reliable.
 - **Environment-driven configuration** that is validated with Zod and surfaced to both the server and the manual CLI.
 - **Skill discovery and indexing** against configurable directories containing JSON or YAML metadata, with lightweight keyword-based scoring.
-- **MCP tools** for skill search, load, and private repository refresh that can be consumed by Smithery or any MCP host.
+- **MCP tools** for skill search and load that can be consumed by Smithery or any MCP host.
 
 ## Architecture
 
 The repository is organized into focused packages:
 
-- `src/config` parses and validates environment variables (directories and private Git settings) and exposes a typed `Config` object used everywhere else.
-- `src/skills` scans configured directories for metadata files (`skill.json`, `skill.yaml`, or `skill.yml`), loads content, scores results, and optionally clones or pulls a private Git repository when refresh is triggered.
+- `src/config` parses and validates environment variables (directories) and exposes a typed `Config` object used everywhere else.
+- `src/skills` scans configured directories for metadata files (`skill.json`, `skill.yaml`, or `skill.yml`), loads content, and scores results without any external dependencies.
 - Keyword scoring occurs inside `src/skills`, so no external vector store or embeddings provider is required.
-- `src/tools` defines the MCP tools (`skill-search`, `skill-load`, `skill-refresh`) with JSON Schemas and handlers that wrap the `SkillService` methods.
+- `src/tools` defines the MCP tools (`skill-search`, `skill-load`) with JSON Schemas and handlers that wrap the `SkillService` methods.
 - `src/server` wires the SDK server entry point with configured tools for MCP hosts.
 - `scripts/cli.ts` offers a manual CLI that shares the same configuration and services for local validation.
 - `tests/` contains Vitest suites covering configuration parsing, skill scanning, and tool schemas to prevent regressions.
@@ -29,7 +29,7 @@ The repository is organized into focused packages:
 
 - Node.js ≥ 18 (matching the `engines` requirement in `package.json`).
 - npm 9+ (ships with Node 18).
-- Git (for private skill repository refresh operations).
+- Git.
 
 ### Install, build, and run
 
@@ -58,12 +58,8 @@ All runtime configuration flows through environment variables parsed in `src/con
 | `NODE_ENV` | Runtime environment label used for logging and diagnostics. | `development` |
 | `PORT` | HTTP port for the MCP server. | `3000` |
 | `SKILLS_DIRECTORIES` | Comma-separated list of directories that contain skill folders. | `skills` |
-| `PRIVATE_SKILLS_ENABLED` | Enable Git cloning/pulling for private skills. Requires `PRIVATE_SKILLS_GIT_URL`. | `false` |
-| `PRIVATE_SKILLS_GIT_URL` | Git URL to clone when private skills are enabled. | — |
-| `PRIVATE_SKILLS_GIT_BRANCH` | Branch name used for the private checkout. | `main` |
-| `PRIVATE_SKILLS_DIR` | Local directory where the private repository is cloned. | `<repo>/private-skills` |
 
-If you enable private skills but omit the Git URL, startup will fail with configuration validation errors, helping you catch misconfigurations early.
+Set `SKILLS_DIRECTORIES` to the folder that Smithery or your container image should mount. Smithery defaults to the repository's root `skills/` directory, while Docker deployments can point to any mounted path via environment variables.
 
 ### Starting the server
 
@@ -88,26 +84,6 @@ By default the server listens on `PORT` (3000) and registers the MCP tools expos
 3. Add any files referenced by the metadata (for example `README.md`, code snippets, or prompts).
 4. Run `npm run cli -- search "<query>"` or `npm run cli -- load <skill-id>` to verify indexing locally.
 
-### Adding private skills
-
-1. Configure the environment variables:
-   ```bash
-   export PRIVATE_SKILLS_ENABLED=true
-   export PRIVATE_SKILLS_GIT_URL=git@github.com:<org>/<repo>.git
-   export PRIVATE_SKILLS_GIT_BRANCH=main # optional
-   export PRIVATE_SKILLS_DIR=/absolute/path/to/private-skills
-   ```
-2. Build the server (`npm run build`) and run either the server or the CLI refresh command:
-   ```bash
-   npm run cli -- refresh
-   ```
-   The refresh command clones the repository to `PRIVATE_SKILLS_DIR` if it does not exist, or fetches, checks out, and pulls the configured branch when it already exists.
-3. Skills under the cloned repository are indexed alongside local skills on the next search/load call because the cache is invalidated whenever a refresh completes.
-
-### Git-based refresh configuration
-
-Refresh operations are executed with the system `git` binary. Ensure the runtime environment has SSH keys or HTTPS credentials configured so `git clone` and `git pull` succeed. You can schedule periodic refreshes by invoking the `skill-refresh` tool or CLI command from automation.
-
 ## Testing
 
 Run the Vitest suites at any time:
@@ -128,9 +104,6 @@ npm run cli -- search "vector search" 5
 
 # Load a specific skill and inspect the returned metadata + file contents
 npm run cli -- load sample-skill
-
-# Clone or pull the private skills repository
-npm run cli -- refresh
 ```
 
 The CLI prints JSON responses for each command and shares the same configuration and scoring logic as the server.
@@ -172,38 +145,31 @@ services:
     environment:
       PORT: 3000
       SKILLS_DIRECTORIES: /data/skills
-      PRIVATE_SKILLS_ENABLED: "true"
-      PRIVATE_SKILLS_GIT_URL: git@github.com:your-org/private-skills.git
-      PRIVATE_SKILLS_DIR: /data/private-skills
     volumes:
       - ./skills:/data/skills:ro
-      - ./private-skills:/data/private-skills
 ```
 
-Mount your local public and private skills directories to keep them editable without rebuilding the image. The container requires `git` and SSH credentials when private refresh is enabled; bake them into the image or mount them via secrets as appropriate.
+Mount your local skills directory to keep it editable without rebuilding the image. The container only needs the skills files and environment variables; no Git credentials or additional services are required.
 
 ### Docker Compose deployment
 
-The repository ships with a `docker-compose.yml` that is ready for production-style deployments and local file loading. Public and private skills are mounted from the `skills/` directory in the repository so you can edit metadata and supporting files without rebuilding the image.
+The repository ships with a `docker-compose.yml` that is ready for production-style deployments and local file loading. Skills are mounted from the `skills/` directory in the repository so you can edit metadata and supporting files without rebuilding the image.
 
 ```bash
 # Ensure the local skills directories exist (they are pre-seeded with .gitkeep files)
-mkdir -p skills/public skills/private
-
-# Optional: configure private repository access
-export PRIVATE_SKILLS_ENABLED=false
-export PRIVATE_SKILLS_GIT_URL=git@github.com:your-org/private-skills.git
-export PRIVATE_SKILLS_GIT_BRANCH=main
+mkdir -p skills
 
 # Build and start the service
 docker compose up --build
 ```
 
-The compose service exposes port `3000` by default, mounts `skills/public` as read-only for local skill files, and mounts `skills/private` for any cloned private repository. Update the `SKILLS_DIRECTORIES` value in `docker-compose.yml` if you want to point at different directories on the container filesystem.
+The compose service exposes port `3000` by default and mounts `skills/` as read-only for local skill files. Update the `SKILLS_DIRECTORIES` value in `docker-compose.yml` if you want to point at different directories on the container filesystem.
 
 ## Smithery integration and MCP tooling
 
 Smithery and other MCP hosts discover the server via the `.well-known/mcp.json` manifest, which declares the executable (`node ./dist/server/index.js`) and friendly display name.
+
+For Smithery deployments, keep `SKILLS_DIRECTORIES` at its default value of `skills` so the platform can read the repository's root `skills/` folder directly.
 
 ### Registering with Smithery
 
@@ -265,18 +231,7 @@ All tools accept/return JSON payloads that match the schemas in `src/tools/index
     "README.md": "# Vector Store Basics\n..."
   }
 }
-
-// skill-refresh request
-{
-  "name": "skill-refresh",
-  "arguments": {}
-}
-
-// skill-refresh response payload
-{
-  "status": "pulled"
-}
 ```
 
-Smithery displays the JSON responses in its UI, so you can copy-paste the payloads above into manual tool invocations for quick validation. Search responses include keyword relevance scores and the full metadata block, load responses echo the metadata and inline the requested files, and refresh responses indicate whether a clone, pull, or skip occurred.
+Smithery displays the JSON responses in its UI, so you can copy-paste the payloads above into manual tool invocations for quick validation. Search responses include keyword relevance scores and the full metadata block, and load responses echo the metadata while inlining the requested files.
 

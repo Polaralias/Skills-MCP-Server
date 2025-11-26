@@ -75,25 +75,6 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
   );
 
   server.registerTool(
-    'skill-refresh',
-    {
-      description: 'Refresh private skill repositories if enabled.'
-    },
-    async () => {
-      const result = await skillService.refreshPrivateRepository();
-      return {
-        content: [
-          {
-            type: 'json',
-            json: result
-          }
-        ],
-        structuredContent: result
-      };
-    }
-  );
-
-  return {
     config,
     skillService,
     server

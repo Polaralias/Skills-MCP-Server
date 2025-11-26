@@ -10,14 +10,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      SKILLS_DIRECTORIES: /app/skills/public,/app/skills/private
-      PRIVATE_SKILLS_ENABLED: ${PRIVATE_SKILLS_ENABLED:-false}
-      PRIVATE_SKILLS_GIT_URL: ${PRIVATE_SKILLS_GIT_URL:-}
-      PRIVATE_SKILLS_GIT_BRANCH: ${PRIVATE_SKILLS_GIT_BRANCH:-main}
-      PRIVATE_SKILLS_DIR: /app/skills/private
+      SKILLS_DIRECTORIES: /app/skills
     volumes:
-      - ./skills/public:/app/skills/public:ro
-      - ./skills/private:/app/skills/private
+      - ./skills:/app/skills:ro
     ports:
       - "3000:3000"
     command: ["node", "./dist/server/index.js"]
