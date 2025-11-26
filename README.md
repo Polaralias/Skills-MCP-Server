@@ -75,14 +75,77 @@ By default the server listens on `PORT` (3000) and registers the MCP tools expos
 
 ### Adding public skills
 
-1. Create a folder inside one of the directories listed in `SKILLS_DIRECTORIES` (defaults to `skills/<skill-id>`).
-2. Add a metadata file named `skill.json`, `skill.yaml`, or `skill.yml` with the following fields:
-   - `name` and `description` (strings).
-   - Optional `tags` array for search keywords.
-   - Optional `files` array listing additional files to include when loading the skill (defaults to `README.md`).
-   - Optional `repository` and `version` metadata for traceability.
-3. Add any files referenced by the metadata (for example `README.md`, code snippets, or prompts).
-4. Run `npm run cli -- search "<query>"` or `npm run cli -- load <skill-id>` to verify indexing locally.
+Skills are simple folders with a small metadata file and one or more documentation files. The server indexes everything under `SKILLS_DIRECTORIES` (defaults to `skills/`) and exposes it through the MCP tools. Follow the conventions below to keep skills discoverable and portable.
+
+#### Directory layout
+
+```
+skills/
+  <skill-id>/
+    skill.yaml     # or skill.yml / skill.json
+    SKILL.md       # human-readable instructions
+    <supporting files referenced by the metadata>
+```
+
+- Each skill lives in its own folder named after the `id` used by `skill-load`.
+- The metadata file **must** be named `skill.json`, `skill.yaml`, or `skill.yml` and live at the folder root.
+- Add a `SKILL.md` (or `README.md`) to contain the actual guidance the MCP client will load.
+
+You can copy `skills/template-skill` as a starting point.
+
+#### Metadata schema
+
+The metadata file describes the skill and which files to return. YAML and JSON are both supported. Minimum required fields:
+
+- `name`: Human-friendly title for the skill (string).
+- `description`: One to two sentences about when the skill should be used (string).
+
+Optional fields:
+
+- `tags`: Array of keyword strings that improve search relevance.
+- `files`: Array of relative file paths to include in `skill-load` responses. Defaults to `README.md` if omitted.
+- `version`: Version string (for example `1.0.0`).
+- `repository`: Source repository URL for traceability.
+
+Example YAML metadata:
+
+```yaml
+name: http-request
+description: Guidance for issuing authenticated HTTP requests.
+tags:
+  - http
+  - api
+  - fetch
+files:
+  - SKILL.md
+  - examples.md
+version: 1.0.0
+repository: https://github.com/example/skills
+```
+
+#### Writing SKILL.md
+
+`SKILL.md` holds the instructions or prompt content the MCP client receives from `skill-load`. Use the template in `skills/template-skill/SKILL.md` and replace the frontmatter values:
+
+```markdown
+---
+name: template-skill
+description: Replace with description of the skill and when Claude should use it.
+---
+
+# Insert instructions below
+```
+
+- Update `name` and `description` to match the skill metadata.
+- Put actionable guidance below the frontmatter (playbooks, prompts, or code snippets).
+- Keep text concise and in English; avoid tool- or environment-specific assumptions unless required.
+
+#### Validating a new skill
+
+1. Create the folder and metadata file using the schema above.
+2. Add `SKILL.md` content and any supporting files referenced in `files`.
+3. Run `npm run cli -- search "<query>"` to confirm the skill appears in search results.
+4. Run `npm run cli -- load <skill-id>` to ensure metadata and file contents load as expected.
 
 ## Testing
 
