@@ -3,9 +3,9 @@ build:
   dockerfile: "Dockerfile"
   dockerBuildPath: "."
 startCommand:
-  type: "stdio"
+  type: "http"
   configSchema:
-    type: "object"
+    type: object
     properties:
       SKILLS_DIRECTORIES:
         type: "string"
