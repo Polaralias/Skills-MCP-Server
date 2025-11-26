@@ -32,17 +32,13 @@ class FakeSkillService {
       }
     };
   }
-
-  async refreshPrivateRepository(): Promise<{ status: 'skipped' }> {
-    return { status: 'skipped' };
-  }
 }
 
 describe('MCP tool wiring', () => {
-  it('exposes search, load, and refresh tools with schemas', async () => {
+  it('exposes search and load tools with schemas', async () => {
     const tools = buildTools(new FakeSkillService() as unknown as SkillService);
     const names = tools.map((tool) => tool.name).sort();
-    expect(names).toEqual(['skill-load', 'skill-refresh', 'skill-search']);
+    expect(names).toEqual(['skill-load', 'skill-search']);
 
     const searchTool = tools.find((tool) => tool.name === 'skill-search');
     expect(searchTool?.schema).toHaveProperty('properties.query');
@@ -53,9 +49,5 @@ describe('MCP tool wiring', () => {
     expect(loadTool?.schema).toHaveProperty('properties.id');
     const loadResult = await loadTool?.handler({ id: 'alpha' });
     expect(loadResult).toHaveProperty('content');
-
-    const refreshTool = tools.find((tool) => tool.name === 'skill-refresh');
-    const refreshResult = await refreshTool?.handler({});
-    expect(refreshResult).toEqual({ status: 'skipped' });
   });
 });

@@ -1,7 +1,6 @@
 import { promises as fs, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { loadConfig, Config } from '../src/config';
 import { SkillService, SkillSummary } from '../src/skills';
@@ -78,93 +77,5 @@ describe('SkillService filesystem operations', () => {
     expect(result).toBeDefined();
     expect(result?.skillId).toBe('beta');
     expect(result?.metadata.name).toBe('Beta Skill');
-  });
-});
-
-describe('private repository refresh', () => {
-  const runGit = async (args: string[], cwd: string): Promise<void> => {
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn('git', args, { cwd });
-      child.on('error', reject);
-      child.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git ${args.join(' ')} exited with ${code}`));
-        }
-      });
-    });
-  };
-
-  const writeFile = async (file: string, content: string): Promise<void> => {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, content, 'utf8');
-  };
-
-  it('clones the repository when not already present', async () => {
-    const remoteDir = createTempDir();
-    await runGit(['init', '--bare'], remoteDir);
-
-    const seedDir = createTempDir();
-    await runGit(['init'], seedDir);
-    await writeFile(path.join(seedDir, 'README.md'), 'seed');
-    await runGit(['add', '.'], seedDir);
-    await runGit(['commit', '-m', 'initial'], seedDir);
-    await runGit(['branch', '-M', 'main'], seedDir);
-    await runGit(['remote', 'add', 'origin', remoteDir], seedDir);
-    await runGit(['push', '-u', 'origin', 'main'], seedDir);
-
-    const cloneDir = path.join(createTempDir(), 'private');
-    process.env.PRIVATE_SKILLS_ENABLED = 'true';
-    process.env.PRIVATE_SKILLS_GIT_URL = remoteDir;
-    process.env.PRIVATE_SKILLS_DIR = cloneDir;
-
-    const config = loadConfig();
-    const service = new SkillService({ config });
-
-    const result = await service.refreshPrivateRepository();
-    expect(result.status).toBe('cloned');
-    const clonedFile = await fs.readFile(path.join(cloneDir, 'README.md'), 'utf8');
-    expect(clonedFile).toContain('seed');
-  });
-
-  it('pulls the repository when already cloned', async () => {
-    const remoteDir = createTempDir();
-    await runGit(['init', '--bare'], remoteDir);
-
-    const seedDir = createTempDir();
-    await runGit(['init'], seedDir);
-    await writeFile(path.join(seedDir, 'README.md'), 'initial');
-    await runGit(['add', '.'], seedDir);
-    await runGit(['commit', '-m', 'initial'], seedDir);
-    await runGit(['branch', '-M', 'main'], seedDir);
-    await runGit(['remote', 'add', 'origin', remoteDir], seedDir);
-    await runGit(['push', '-u', 'origin', 'main'], seedDir);
-
-    const cloneDir = path.join(createTempDir(), 'private');
-    process.env.PRIVATE_SKILLS_ENABLED = 'true';
-    process.env.PRIVATE_SKILLS_GIT_URL = remoteDir;
-    process.env.PRIVATE_SKILLS_DIR = cloneDir;
-
-    let config = loadConfig();
-    let service = new SkillService({ config });
-
-    await service.refreshPrivateRepository();
-
-    await writeFile(path.join(seedDir, 'README.md'), 'updated');
-    await runGit(['add', '.'], seedDir);
-    await runGit(['commit', '-m', 'update'], seedDir);
-    await runGit(['push'], seedDir);
-
-    process.env.PRIVATE_SKILLS_ENABLED = 'true';
-    process.env.PRIVATE_SKILLS_GIT_URL = remoteDir;
-    process.env.PRIVATE_SKILLS_DIR = cloneDir;
-    config = loadConfig();
-    service = new SkillService({ config });
-
-    const result = await service.refreshPrivateRepository();
-    expect(result.status).toBe('pulled');
-    const contents = await fs.readFile(path.join(cloneDir, 'README.md'), 'utf8');
-    expect(contents).toContain('updated');
   });
 });
