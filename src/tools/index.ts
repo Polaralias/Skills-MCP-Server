@@ -1,10 +1,13 @@
+import { z } from 'zod';
 import { SkillService, LoadedSkill, SkillSummary, SkillSearchResult } from '../skills';
 
-export interface Tool<TInput = unknown, TOutput = unknown> {
+export type ToolSchema = z.ZodObject<Record<string, z.ZodTypeAny>>;
+
+export interface Tool<TSchema extends ToolSchema = ToolSchema, TOutput extends object = object> {
   readonly name: string;
   readonly description: string;
-  readonly schema: Record<string, unknown>;
-  readonly handler: (input: TInput) => Promise<TOutput>;
+  readonly schema: TSchema;
+  readonly handler: (input: z.infer<TSchema>) => Promise<TOutput>;
 }
 
 interface SkillSearchResponse {
@@ -12,39 +15,29 @@ interface SkillSearchResponse {
 }
 
 export const buildTools = (skillService: SkillService): Array<Tool> => {
-  const searchTool: Tool<{ query: string; limit?: number }, SkillSearchResponse> = {
+  const searchSchema = z.object({
+    query: z.string().describe('Search query to match against skills.'),
+    limit: z.number().int().positive().optional()
+  });
+
+  const searchTool: Tool<typeof searchSchema, SkillSearchResponse> = {
     name: 'skill-search',
     description: 'Search the indexed skills by keyword relevance.',
-    schema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'Search query to match against skills.' },
-        limit: {
-          type: 'number',
-          description: 'Maximum number of results to return.',
-          minimum: 1
-        }
-      },
-      required: ['query'],
-      additionalProperties: false
-    },
+    schema: searchSchema,
     handler: async (input) => {
       const results = await skillService.searchSkills(input.query, input.limit);
       return { results } satisfies SkillSearchResponse;
     }
   };
 
-  const loadTool: Tool<{ id: string }, LoadedSkill> = {
+  const loadSchema = z.object({
+    id: z.string().describe('Identifier of the skill to load.')
+  });
+
+  const loadTool: Tool<typeof loadSchema, LoadedSkill> = {
     name: 'skill-load',
     description: 'Load the metadata and content for a specific skill.',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', description: 'Identifier of the skill to load.' }
-      },
-      required: ['id'],
-      additionalProperties: false
-    },
+    schema: loadSchema,
     handler: async (input) => skillService.loadSkill(input.id)
   };
 

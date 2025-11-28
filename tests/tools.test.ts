@@ -41,12 +41,12 @@ describe('MCP tool wiring', () => {
     expect(names).toEqual(['skill-load', 'skill-search']);
 
     const searchTool = tools.find((tool) => tool.name === 'skill-search');
-    expect(searchTool?.schema).toHaveProperty('properties.query');
-    const searchResult = await searchTool?.handler({ query: 'alpha' });
+    expect(searchTool?.schema.safeParse({ query: 'alpha', limit: 1 }).success).toBe(true);
+    const searchResult = await searchTool?.handler({ query: 'alpha', limit: 1 });
     expect(searchResult).toHaveProperty('results');
 
     const loadTool = tools.find((tool) => tool.name === 'skill-load');
-    expect(loadTool?.schema).toHaveProperty('properties.id');
+    expect(loadTool?.schema.safeParse({ id: 'alpha' }).success).toBe(true);
     const loadResult = await loadTool?.handler({ id: 'alpha' });
     expect(loadResult).toHaveProperty('content');
   });

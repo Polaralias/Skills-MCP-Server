@@ -1,6 +1,6 @@
 {
   "name": "skills-mcp-server",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Model Context Protocol server for discovering and loading skills",
   "type": "module",
   "main": "dist/server/index.js",
@@ -9,13 +9,14 @@
     "./cli": "./dist/scripts/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "build:watch": "tsc -p tsconfig.json --watch",
+    "build": "tsc",
     "lint": "eslint \"{src,scripts,tests}/**/*.ts\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "dev": "vitest",
+    "dev": "tsx src/server/index.ts",
+    "start": "node dist/server/index.js",
+    "start:stdio": "node dist/server/index.js",
     "cli": "tsx scripts/cli.ts"
   },
   "keywords": [
