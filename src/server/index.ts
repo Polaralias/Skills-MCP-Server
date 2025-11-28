@@ -74,7 +74,7 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
     }
   );
 
-  server.registerTool(
+  return {
     config,
     skillService,
     server
