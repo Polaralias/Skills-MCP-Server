@@ -5,21 +5,18 @@ build:
 startCommand:
   type: "http"
   configSchema:
-    type: object
+    type: "object"
     properties:
       SKILLS_DIRECTORIES:
         type: "string"
         description: "Comma-separated directories containing skills to index."
-        default: "skills"
       PORT:
         type: "integer"
         description: "Port used when running the MCP server (informational for HTTP runners)."
-        default: 3000
       NODE_ENV:
         type: "string"
         description: "Node environment used for diagnostics."
-        default: "production"
-    required: []
+    additionalProperties: false
   exampleConfig:
     SKILLS_DIRECTORIES: "skills"
     PORT: 3000
