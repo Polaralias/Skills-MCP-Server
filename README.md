@@ -69,7 +69,11 @@ After building (`npm run build`), start the MCP server with:
 node dist/server/index.js
 ```
 
-By default the server listens on `PORT` (3000) and registers the MCP tools exposed in `src/tools` for connected clients.
+The server listens on `PORT` (3000 by default) and exposes the Streamable HTTP endpoint at `POST /mcp` (with CORS enabled) for MCP clients. Health checks are available at `GET /health`.
+
+### Smithery deployment
+
+Smithery can deploy this server via the included `smithery.yaml`. The container build uses the repository `skills/` directory by default (`SKILLS_DIRECTORIES=/app/skills`) and listens on the `PORT` environment variable set by Smithery with the MCP endpoint served at `/mcp`.
 
 ## Managing skills
 
