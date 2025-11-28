@@ -1,9 +1,9 @@
 import process from 'node:process';
-import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio';
 import { loadConfig, Config } from '../config';
 import { SkillService } from '../skills';
+import { buildTools } from '../tools';
 
 export interface ServerContext {
   readonly config: Config;
@@ -27,54 +27,37 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
     }
   });
 
-  const searchSchema = z.object({
-    query: z.string().describe('Search query to match against skill descriptions and content.'),
-    limit: z.number().int().positive().max(50).optional()
-  });
-
-  server.registerTool(
-    'skill-search',
-    {
-      description: 'Search for skills using keyword relevance.',
-      inputSchema: searchSchema
-    },
-    async ({ query, limit }) => {
-      const results = await skillService.searchSkills(query, limit);
+  const tools = buildTools(skillService);
+  for (const tool of tools) {
+    type RegisterToolParams = Parameters<McpServer['registerTool']>;
+    const inputSchema = tool.schema as unknown as RegisterToolParams[1]['inputSchema'];
+    const handler: RegisterToolParams[2] = async (
+      input: Parameters<RegisterToolParams[2]>[0],
+      _extra: Parameters<RegisterToolParams[2]>[1]
+    ) => {
+      const parsedInput = tool.schema.parse(input);
+      const result = await tool.handler(parsedInput);
       return {
         content: [
           {
-            type: 'json',
-            json: { results }
+            type: 'text' as const,
+            text: JSON.stringify(result, null, 2)
           }
         ],
-        structuredContent: { results }
+        structuredContent: result as Record<string, unknown>
       };
-    }
-  );
+    };
+    server.registerTool(
+      tool.name,
+      {
+        description: tool.description,
+        inputSchema
+      },
+      handler
+    );
+  }
 
-  server.registerTool(
-    'skill-load',
-    {
-      description: 'Load a skill by identifier.',
-      inputSchema: z.object({
-        id: z.string().describe('Identifier of the skill directory to load.')
-      })
-    },
-    async ({ id }) => {
-      const skill = await skillService.loadSkill(id);
-      return {
-        content: [
-          {
-            type: 'json',
-            json: skill
-          }
-        ],
-        structuredContent: skill
-      };
-    }
-  );
-
-  server.registerTool(
+  return {
     config,
     skillService,
     server

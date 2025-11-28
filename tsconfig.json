@@ -4,7 +4,7 @@
     "module": "ES2020",
     "moduleResolution": "Node",
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -12,6 +12,6 @@
     "resolveJsonModule": true,
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src", "tests", "scripts"],
-  "exclude": ["dist", "node_modules"]
+  "include": ["src", "scripts"],
+  "exclude": ["dist", "node_modules", "tests"]
 }
