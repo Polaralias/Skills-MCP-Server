@@ -4,6 +4,8 @@ build:
   dockerBuildPath: "."
 startCommand:
   type: "http"
+  port: 3000
+  healthCheckPath: "/health"
   path: "/mcp"
   exampleConfig:
     skillsDirectory: "./skills"
