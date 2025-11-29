@@ -20,6 +20,60 @@ const SERVER_INFO = {
   version: '0.1.0'
 } as const;
 
+const SERVER_DESCRIPTION =
+  'Model Context Protocol server for discovering and loading reusable skills';
+
+const buildBaseUrl = (req: IncomingMessage, config: Config): string => {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const protocol = Array.isArray(forwardedProto)
+    ? forwardedProto[0]
+    : forwardedProto ?? 'http';
+
+  if (req.headers.origin) {
+    return req.headers.origin;
+  }
+
+  if (req.headers.host) {
+    return `${protocol}://${req.headers.host}`;
+  }
+
+  return `${protocol}://localhost:${config.port}`;
+};
+
+const buildWellKnownManifest = (req: IncomingMessage, config: Config) => {
+  const baseUrl = buildBaseUrl(req, config);
+  const endpoint = `${baseUrl}/mcp`;
+
+  return {
+    mcpServers: {
+      [SERVER_INFO.name]: {
+        name: 'Skills MCP Server',
+        description: SERVER_DESCRIPTION,
+        transport: {
+          type: 'http',
+          url: endpoint
+        },
+        healthCheck: `${baseUrl}/health`,
+        skillsDirectories: config.skills.directories
+      }
+    }
+  } as const;
+};
+
+const buildWellKnownConfig = (req: IncomingMessage, config: Config) => {
+  const baseUrl = buildBaseUrl(req, config);
+
+  return {
+    endpoint: `${baseUrl}/mcp`,
+    server: {
+      name: SERVER_INFO.name,
+      version: SERVER_INFO.version,
+      description: SERVER_DESCRIPTION,
+      healthCheck: `${baseUrl}/health`
+    }
+  } as const;
+};
+
 export const createServer = (config: Config = loadConfig()): ServerContext => {
   const skillService = new SkillService({ config });
 
@@ -126,6 +180,18 @@ const respondWithCors = (
   res.writeHead(statusCode).end();
 };
 
+const respondWithJson = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  body: unknown,
+  statusCode = 200
+): void => {
+  applyCorsHeaders(req, res);
+  res.writeHead(statusCode, { 'Content-Type': 'application/json' }).end(
+    JSON.stringify(body, null, 2)
+  );
+};
+
 function createHttpServer(
   transport: StreamableHTTPServerTransport,
   config: Config
@@ -137,6 +203,16 @@ function createHttpServer(
     }
 
     const url = new URL(req.url, 'http://localhost');
+
+    if (url.pathname === '/.well-known/mcp.json') {
+      respondWithJson(req, res, buildWellKnownManifest(req, config));
+      return;
+    }
+
+    if (url.pathname === '/.well-known/mcp-config') {
+      respondWithJson(req, res, buildWellKnownConfig(req, config));
+      return;
+    }
 
     if (url.pathname === '/mcp') {
       applyCorsHeaders(req, res);
