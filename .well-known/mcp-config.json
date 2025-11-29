@@ -1,0 +1,9 @@
+{
+  "endpoint": "/mcp",
+  "server": {
+    "name": "skills-mcp-server",
+    "version": "0.1.0",
+    "description": "Model Context Protocol server for discovering and loading reusable skills",
+    "healthCheck": "/health"
+  }
+}
