@@ -9,8 +9,7 @@ COPY . .
 RUN npm run build
 
 ENV NODE_ENV=production \
-    PORT=3000 \
-    SKILLS_DIRECTORIES=/app/skills
+    PORT=3000
 
 RUN mkdir -p /app/skills/public /app/skills/private /app/data
 
