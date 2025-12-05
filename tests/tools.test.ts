@@ -70,6 +70,7 @@ describe('MCP tool wiring', () => {
     expect(searchResult).toHaveProperty('results');
     expect(searchResult).toHaveProperty('topSkillMarkdown');
     expect(searchResult?.topSkillMarkdown?.linkedSkills).toEqual(['gamma']);
+    expect(searchResult?.topSkillMarkdown?.primaryFile.content).toContain('# Markdown content');
 
     const loadTool = tools.find((tool) => tool.name === 'skill-load');
     expect(loadTool?.schema.safeParse({ id: 'alpha' }).success).toBe(true);
@@ -97,5 +98,6 @@ describe('MCP tool wiring', () => {
     const markdown = await tool.handler({});
     expect(markdown.id).toBe('delta');
     expect(markdown.linkedSkills).toEqual(['gamma']);
+    expect(markdown.primaryFile.content).toContain('# Markdown content');
   });
 });

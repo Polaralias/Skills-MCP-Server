@@ -89,6 +89,7 @@ describe('SkillService filesystem operations', () => {
     const skill = await service.loadSkill('beta');
 
     expect(skill.metadata.name).toBe('Beta Skill');
+    expect(skill.metadata.linkedSkills).toEqual(['alpha']);
     expect(skill.content['docs/guide.md']).toContain('Beta content');
   });
 
