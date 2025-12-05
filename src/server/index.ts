@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp';
 import { loadConfig, Config } from '../config';
 import { SkillService } from '../skills';
-import { buildTools } from '../tools';
+import { buildSkillToolForSummary, buildTools, type Tool } from '../tools';
 
 export interface ServerContext {
   readonly config: Config;
@@ -85,8 +85,7 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
     }
   });
 
-  const tools = buildTools(skillService);
-  for (const tool of tools) {
+  const registerTool = (tool: Tool): void => {
     type RegisterToolParams = Parameters<McpServer['registerTool']>;
     const inputSchema = tool.schema as unknown as RegisterToolParams[1]['inputSchema'];
     const handler: RegisterToolParams[2] = async (
@@ -105,6 +104,7 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
         structuredContent: result as Record<string, unknown>
       };
     };
+
     server.registerTool(
       tool.name,
       {
@@ -113,7 +113,29 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
       },
       handler
     );
+  };
+
+  const tools = buildTools(skillService);
+  for (const tool of tools) {
+    registerTool(tool);
   }
+
+  void (async () => {
+    try {
+      const summaries = await skillService.discoverSkills();
+      const dynamicTools = summaries.map((summary) =>
+        buildSkillToolForSummary(skillService, summary)
+      );
+
+      for (const tool of dynamicTools) {
+        registerTool(tool);
+      }
+
+      await server.notifyToolsListChanged();
+    } catch (error) {
+      console.error('Failed to register dynamic skill tools', error);
+    }
+  })();
 
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID()
