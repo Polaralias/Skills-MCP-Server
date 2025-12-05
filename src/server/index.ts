@@ -131,7 +131,7 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
         registerTool(tool);
       }
 
-      await server.notifyToolsListChanged();
+      server.sendToolListChanged();
     } catch (error) {
       console.error('Failed to register dynamic skill tools', error);
     }
