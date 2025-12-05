@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { SkillService, LoadedSkill, SkillSummary, SkillSearchResult } from '../skills';
+import {
+  SkillService,
+  LoadedSkill,
+  SkillSummary,
+  SkillSearchResult,
+  SkillMarkdown
+} from '../skills';
 
 export type ToolSchema = z.ZodObject<Record<string, z.ZodTypeAny>>;
 
@@ -12,6 +18,7 @@ export interface Tool<TSchema extends ToolSchema = ToolSchema, TOutput extends o
 
 interface SkillSearchResponse {
   readonly results: SkillSearchResult[];
+  readonly topSkillMarkdown?: SkillMarkdown;
 }
 
 export const buildTools = (skillService: SkillService): Array<Tool> => {
@@ -26,7 +33,12 @@ export const buildTools = (skillService: SkillService): Array<Tool> => {
     schema: searchSchema,
     handler: async (input) => {
       const results = await skillService.searchSkills(input.query, input.limit);
-      return { results } satisfies SkillSearchResponse;
+      const topSkill = results[0];
+      const topSkillMarkdown = topSkill
+        ? await skillService.loadSkillMarkdown(topSkill.skillId)
+        : undefined;
+
+      return { results, topSkillMarkdown } satisfies SkillSearchResponse;
     }
   };
 
@@ -42,4 +54,18 @@ export const buildTools = (skillService: SkillService): Array<Tool> => {
   };
 
   return [searchTool, loadTool];
+};
+
+export const buildSkillToolForSummary = (
+  skillService: SkillService,
+  summary: SkillSummary
+): Tool<ToolSchema, SkillMarkdown> => {
+  const schema: ToolSchema = z.object({});
+
+  return {
+    name: `skill-${summary.id}`,
+    description: `Read the markdown content for skill ${summary.name}.`,
+    schema,
+    handler: async () => skillService.loadSkillMarkdown(summary.id)
+  };
 };
