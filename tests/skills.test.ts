@@ -53,6 +53,12 @@ describe('SkillService filesystem operations', () => {
     });
     await fs.writeFile(path.join(skillsDir, 'gamma', 'README.md'), '# Gamma\nHello', 'utf8');
 
+    await writeJson(path.join(skillsDir, 'delta', 'skill.json'), {
+      name: 'Delta Skill',
+      description: 'Missing file skill',
+      files: ['docs/missing.md']
+    });
+
     process.env.SKILLS_DIRECTORIES = skillsDir;
 
     config = loadConfig();
@@ -62,7 +68,7 @@ describe('SkillService filesystem operations', () => {
   it('discovers skills with metadata from JSON and YAML sources', async () => {
     const skills = await service.discoverSkills();
 
-    expect(skills.map((skill) => skill.id)).toEqual(['alpha', 'beta', 'gamma']);
+    expect(skills.map((skill) => skill.id)).toEqual(['alpha', 'beta', 'delta', 'gamma']);
 
     const alpha = skills.find((skill) => skill.id === 'alpha') as SkillSummary;
     expect(alpha.name).toBe('Alpha Skill');
@@ -84,6 +90,24 @@ describe('SkillService filesystem operations', () => {
 
     expect(skill.metadata.name).toBe('Beta Skill');
     expect(skill.content['docs/guide.md']).toContain('Beta content');
+  });
+
+  it('loads the primary markdown file using existing metadata', async () => {
+    const skill = await service.loadSkillMarkdown('beta');
+
+    expect(skill.id).toBe('beta');
+    expect(skill.name).toBe('Beta Skill');
+    expect(skill.description).toBe('Second skill');
+    expect(skill.tags).toEqual(['second']);
+    expect(skill.linkedSkills).toEqual(['alpha']);
+    expect(skill.primaryFile.path).toBe('docs/guide.md');
+    expect(skill.primaryFile.content).toBe('Beta content');
+  });
+
+  it('fails when the primary file is missing', async () => {
+    await expect(service.loadSkillMarkdown('delta')).rejects.toThrow(
+      "Primary file 'docs/missing.md' for skill 'delta' was not found"
+    );
   });
 
   it('returns keyword-ranked search results', async () => {

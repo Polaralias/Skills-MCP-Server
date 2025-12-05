@@ -16,6 +16,18 @@ export interface SkillSummary {
   readonly source: 'local';
 }
 
+export interface SkillMarkdown {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly tags: string[];
+  readonly linkedSkills: string[];
+  readonly primaryFile: {
+    readonly path: string;
+    readonly content: string;
+  };
+}
+
 export interface LoadedSkill {
   readonly metadata: SkillSummary;
   readonly content: Record<string, string>;
@@ -62,11 +74,7 @@ export class SkillService {
   }
 
   public async loadSkill(id: string): Promise<LoadedSkill> {
-    const records = await this.scanSkills();
-    const record = records.get(id);
-    if (!record) {
-      throw new Error(`Skill '${id}' was not found`);
-    }
+    const record = await this.getSkillRecord(id);
 
     const content: Record<string, string> = {};
     for (const relativePath of record.summary.files) {
@@ -78,6 +86,41 @@ export class SkillService {
     return {
       metadata: record.summary,
       content
+    };
+  }
+
+  public async loadSkillMarkdown(id: string): Promise<SkillMarkdown> {
+    const record = await this.getSkillRecord(id);
+    const primaryRelativePath = record.summary.files[0];
+
+    if (!primaryRelativePath) {
+      throw new Error(`Skill '${id}' does not define any files`);
+    }
+
+    const primaryPath = path.join(record.directory, primaryRelativePath);
+    let primaryContent: string;
+    try {
+      primaryContent = await fs.readFile(primaryPath, 'utf8');
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        throw new Error(
+          `Primary file '${primaryRelativePath}' for skill '${id}' was not found`
+        );
+      }
+      throw error;
+    }
+
+    return {
+      id: record.summary.id,
+      name: record.summary.name,
+      description: record.summary.description,
+      tags: record.summary.tags,
+      linkedSkills: record.summary.linkedSkills,
+      primaryFile: {
+        path: primaryRelativePath,
+        content: primaryContent
+      }
     };
   }
 
@@ -154,6 +197,15 @@ export class SkillService {
     }
     this.skillCache = records;
     return records;
+  }
+
+  private async getSkillRecord(id: string): Promise<SkillRecord> {
+    const records = await this.scanSkills();
+    const record = records.get(id);
+    if (!record) {
+      throw new Error(`Skill '${id}' was not found`);
+    }
+    return record;
   }
 
   private async readMetadata(directory: string): Promise<z.infer<typeof metadataSchema> | null> {
