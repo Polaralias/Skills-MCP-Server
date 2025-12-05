@@ -74,7 +74,9 @@ const buildWellKnownConfig = (req: IncomingMessage, config: Config) => {
   } as const;
 };
 
-export const createServer = (config: Config = loadConfig()): ServerContext => {
+export const createServer = async (
+  config: Config = loadConfig()
+): Promise<ServerContext> => {
   const skillService = new SkillService({ config });
 
   const server = new McpServer(SERVER_INFO, {
@@ -141,6 +143,13 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
     sessionIdGenerator: () => randomUUID()
   });
 
+  await server.connect(transport);
+
+  transport.onerror = (error) => {
+    console.error('MCP transport error', error);
+  };
+  await transport.start();
+
   const httpServer = createHttpServer(transport, config);
 
   return {
@@ -153,12 +162,7 @@ export const createServer = (config: Config = loadConfig()): ServerContext => {
 };
 
 export const startServer = async (): Promise<ServerContext> => {
-  const context = createServer();
-  await context.server.connect(context.transport);
-  context.transport.onerror = (error) => {
-    console.error('MCP transport error', error);
-  };
-  await context.transport.start();
+  const context = await createServer();
 
   await new Promise<void>((resolve) => {
     context.httpServer.listen(context.config.port, resolve);
