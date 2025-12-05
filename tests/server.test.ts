@@ -19,7 +19,7 @@ type JsonResponse = {
 };
 
 const startServer = async (): Promise<{ context: ServerContext; port: number }> => {
-  const context = createServer(TEST_CONFIG);
+  const context = await createServer(TEST_CONFIG);
   await new Promise<void>((resolve) => {
     context.httpServer.listen(0, resolve);
   });
