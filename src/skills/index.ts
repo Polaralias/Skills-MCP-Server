@@ -10,6 +10,7 @@ export interface SkillSummary {
   readonly description: string;
   readonly tags: string[];
   readonly files: string[];
+  readonly linkedSkills: string[];
   readonly repository?: string;
   readonly version?: string;
   readonly source: 'local';
@@ -39,7 +40,8 @@ const metadataSchema = z.object({
   name: z.string(),
   description: z.string(),
   tags: z.array(z.string()).default([]),
-  files: z.array(z.string()).default(['README.md']),
+  files: z.array(z.string()).default([]),
+  linkedSkills: z.array(z.string()).default([]),
   repository: z.string().optional(),
   version: z.string().optional()
 });
@@ -182,12 +184,14 @@ export class SkillService {
     metadata: z.infer<typeof metadataSchema>
   ): SkillSummary {
     const files = metadata.files.length > 0 ? metadata.files : ['README.md'];
+    const linkedSkills = Array.from(new Set(metadata.linkedSkills));
     return {
       id: directoryName,
       name: metadata.name,
       description: metadata.description,
       tags: Array.from(new Set(metadata.tags)),
       files,
+      linkedSkills,
       repository: metadata.repository,
       version: metadata.version,
       source: 'local'
