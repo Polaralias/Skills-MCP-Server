@@ -25,7 +25,8 @@ describe('SkillService filesystem operations', () => {
       name: 'Alpha Skill',
       description: 'First skill',
       tags: ['first'],
-      files: ['README.md']
+      files: ['README.md'],
+      linkedSkills: ['beta']
     });
     await fs.writeFile(path.join(skillsDir, 'alpha', 'README.md'), '# Alpha\nHello', 'utf8');
 
@@ -38,11 +39,19 @@ describe('SkillService filesystem operations', () => {
         'tags:',
         '  - second',
         'files:',
-        '  - docs/guide.md'
+        '  - docs/guide.md',
+        'linkedSkills:',
+        '  - alpha'
       ].join('\n'),
       'utf8'
     );
     await fs.writeFile(path.join(skillsDir, 'beta', 'docs', 'guide.md'), 'Beta content', 'utf8');
+
+    await writeJson(path.join(skillsDir, 'gamma', 'skill.json'), {
+      name: 'Gamma Skill',
+      description: 'Third skill'
+    });
+    await fs.writeFile(path.join(skillsDir, 'gamma', 'README.md'), '# Gamma\nHello', 'utf8');
 
     process.env.SKILLS_DIRECTORIES = skillsDir;
 
@@ -53,15 +62,21 @@ describe('SkillService filesystem operations', () => {
   it('discovers skills with metadata from JSON and YAML sources', async () => {
     const skills = await service.discoverSkills();
 
-    expect(skills.map((skill) => skill.id)).toEqual(['alpha', 'beta']);
+    expect(skills.map((skill) => skill.id)).toEqual(['alpha', 'beta', 'gamma']);
 
     const alpha = skills.find((skill) => skill.id === 'alpha') as SkillSummary;
     expect(alpha.name).toBe('Alpha Skill');
     expect(alpha.tags).toEqual(['first']);
+    expect(alpha.linkedSkills).toEqual(['beta']);
 
     const beta = skills.find((skill) => skill.id === 'beta') as SkillSummary;
     expect(beta.name).toBe('Beta Skill');
     expect(beta.tags).toEqual(['second']);
+    expect(beta.linkedSkills).toEqual(['alpha']);
+
+    const gamma = skills.find((skill) => skill.id === 'gamma') as SkillSummary;
+    expect(gamma.files).toEqual(['README.md']);
+    expect(gamma.linkedSkills).toEqual([]);
   });
 
   it('loads skill content defined in metadata files', async () => {
