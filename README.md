@@ -1,5 +1,7 @@
 # Skills MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@Polaralias/skills-mcp-server)](https://smithery.ai/server/@Polaralias/skills-mcp-server)
+
 The Skills MCP Server is a Model Context Protocol (MCP) service that discovers, indexes, and serves reusable "skills" from local directories. It offers keyword-based search and skill loading so MCP-compatible agents can quickly locate the right capabilities.
 
 ## Overview
@@ -301,4 +303,3 @@ All tools accept/return JSON payloads that match the schemas in `src/tools/index
 ```
 
 Smithery displays the JSON responses in its UI, so you can copy-paste the payloads above into manual tool invocations for quick validation. Search responses include keyword relevance scores and the full metadata block, and load responses echo the metadata while inlining the requested files.
-
