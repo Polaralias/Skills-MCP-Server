@@ -93,4 +93,20 @@ describe('well-known endpoints', () => {
     expect(body.server.name).toBe('skills-mcp-server');
     expect(body.server.healthCheck).toBe(`http://127.0.0.1:${started.port}/health`);
   });
+
+  it('preserves reverse proxy base paths when building URLs', async () => {
+    const started = await startServer();
+    context = started.context;
+    const basePath = '/proxy/base/path';
+    const { status, body } = await fetchJson(
+      started.port,
+      `${basePath}/.well-known/mcp-config`
+    );
+
+    expect(status).toBe(200);
+    expect(body.endpoint).toBe(`http://127.0.0.1:${started.port}${basePath}/mcp`);
+    expect(body.server.healthCheck).toBe(
+      `http://127.0.0.1:${started.port}${basePath}/health`
+    );
+  });
 });

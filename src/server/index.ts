@@ -23,26 +23,67 @@ const SERVER_INFO = {
 const SERVER_DESCRIPTION =
   'Model Context Protocol server for discovering and loading reusable skills';
 
-const buildBaseUrl = (req: IncomingMessage, config: Config): string => {
+const WELL_KNOWN_PATHS = ['/.well-known/mcp.json', '/.well-known/mcp-config'] as const;
+const MCP_PATH = '/mcp' as const;
+const HEALTH_PATH = '/health' as const;
+
+const normalizeBasePath = (value: string): string => {
+  if (!value || value === '/') {
+    return '';
+  }
+
+  return value.endsWith('/') && value !== '/' ? value.slice(0, -1) : value;
+};
+
+const extractBasePath = (pathname: string): string => {
+  const knownSuffixes = [...WELL_KNOWN_PATHS, MCP_PATH, HEALTH_PATH];
+
+  for (const suffix of knownSuffixes) {
+    if (pathname === suffix) {
+      return '';
+    }
+
+    if (pathname.endsWith(suffix)) {
+      const basePath = pathname.slice(0, -suffix.length);
+      return normalizeBasePath(basePath);
+    }
+  }
+
+  return '';
+};
+
+const matchesPath = (pathname: string, target: string): boolean =>
+  pathname === target || pathname.endsWith(target);
+
+const buildBaseUrl = (
+  req: IncomingMessage,
+  config: Config,
+  basePath: string
+): string => {
   const forwardedProto = req.headers['x-forwarded-proto'];
+  const forwardedHost = req.headers['x-forwarded-host'];
   const protocol = Array.isArray(forwardedProto)
     ? forwardedProto[0]
     : forwardedProto ?? 'http';
 
+  const host = Array.isArray(forwardedHost)
+    ? forwardedHost[0]
+    : forwardedHost ?? req.headers.host;
+
   if (req.headers.origin) {
-    return req.headers.origin;
+    return `${req.headers.origin}${basePath}`;
   }
 
-  if (req.headers.host) {
-    return `${protocol}://${req.headers.host}`;
+  if (host) {
+    return `${protocol}://${host}${basePath}`;
   }
 
-  return `${protocol}://localhost:${config.port}`;
+  return `${protocol}://localhost:${config.port}${basePath}`;
 };
 
-const buildWellKnownManifest = (req: IncomingMessage, config: Config) => {
-  const baseUrl = buildBaseUrl(req, config);
-  const endpoint = `${baseUrl}/mcp`;
+const buildWellKnownManifest = (req: IncomingMessage, config: Config, basePath: string) => {
+  const baseUrl = buildBaseUrl(req, config, basePath);
+  const endpoint = `${baseUrl}${MCP_PATH}`;
 
   return {
     mcpServers: {
@@ -60,16 +101,16 @@ const buildWellKnownManifest = (req: IncomingMessage, config: Config) => {
   } as const;
 };
 
-const buildWellKnownConfig = (req: IncomingMessage, config: Config) => {
-  const baseUrl = buildBaseUrl(req, config);
+const buildWellKnownConfig = (req: IncomingMessage, config: Config, basePath: string) => {
+  const baseUrl = buildBaseUrl(req, config, basePath);
 
   return {
-    endpoint: `${baseUrl}/mcp`,
+    endpoint: `${baseUrl}${MCP_PATH}`,
     server: {
       name: SERVER_INFO.name,
       version: SERVER_INFO.version,
       description: SERVER_DESCRIPTION,
-      healthCheck: `${baseUrl}/health`
+      healthCheck: `${baseUrl}${HEALTH_PATH}`
     }
   } as const;
 };
@@ -228,18 +269,19 @@ function createHttpServer(
     }
 
     const url = new URL(req.url, 'http://localhost');
+    const basePath = extractBasePath(url.pathname);
 
-    if (url.pathname === '/.well-known/mcp.json') {
-      respondWithJson(req, res, buildWellKnownManifest(req, config));
+    if (matchesPath(url.pathname, WELL_KNOWN_PATHS[0])) {
+      respondWithJson(req, res, buildWellKnownManifest(req, config, basePath));
       return;
     }
 
-    if (url.pathname === '/.well-known/mcp-config') {
-      respondWithJson(req, res, buildWellKnownConfig(req, config));
+    if (matchesPath(url.pathname, WELL_KNOWN_PATHS[1])) {
+      respondWithJson(req, res, buildWellKnownConfig(req, config, basePath));
       return;
     }
 
-    if (url.pathname === '/mcp') {
+    if (matchesPath(url.pathname, MCP_PATH)) {
       applyCorsHeaders(req, res);
 
       if (isCorsPreflight(req)) {
@@ -251,7 +293,7 @@ function createHttpServer(
       return;
     }
 
-    if (url.pathname === '/health') {
+    if (matchesPath(url.pathname, HEALTH_PATH)) {
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(
         JSON.stringify({ status: 'ok', port: config.port })
       );
