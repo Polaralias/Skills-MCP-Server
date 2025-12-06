@@ -258,6 +258,27 @@ const respondWithJson = (
   );
 };
 
+const normalizeAcceptHeader = (req: IncomingMessage): void => {
+  const acceptHeader = req.headers.accept;
+  const accept = Array.isArray(acceptHeader)
+    ? acceptHeader.join(', ')
+    : acceptHeader ?? '';
+
+  const hasJson = accept.includes('application/json');
+  const hasEventStream = accept.includes('text/event-stream');
+
+  if (hasJson && hasEventStream) {
+    return;
+  }
+
+  const acceptValues = ['application/json', 'text/event-stream'];
+  if (accept.trim().length > 0) {
+    acceptValues.push(accept);
+  }
+
+  req.headers.accept = acceptValues.join(', ');
+};
+
 function createHttpServer(
   transport: StreamableHTTPServerTransport,
   config: Config
@@ -289,6 +310,7 @@ function createHttpServer(
         return;
       }
 
+      normalizeAcceptHeader(req);
       await transport.handleRequest(req, res);
       return;
     }
