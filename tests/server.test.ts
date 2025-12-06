@@ -121,23 +121,29 @@ describe('mcp endpoint accept handling', () => {
   let context: ServerContext | null = null;
   let port: number | null = null;
 
-  const sendMcpRequest = async (
-    headers: Record<string, string | undefined> = {}
-  ): Promise<JsonResponse> => {
+type McpRequestOptions = {
+  readonly headers?: Record<string, string | undefined>;
+  readonly path?: string;
+  readonly payload?: string;
+};
+
+const sendMcpRequest = async ({
+  headers = {},
+  path = '/mcp',
+  payload = JSON.stringify({
+    jsonrpc: '2.0',
+    id: 'test',
+    method: 'initialize',
+    params: {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'vitest', version: '1.0.0' }
+    }
+  })
+}: McpRequestOptions = {}): Promise<JsonResponse> => {
     if (!port) {
       throw new Error('Server port not available');
     }
-
-    const payload = JSON.stringify({
-      jsonrpc: '2.0',
-      id: 'test',
-      method: 'initialize',
-      params: {
-        protocolVersion: '2024-11-05',
-        capabilities: {},
-        clientInfo: { name: 'vitest', version: '1.0.0' }
-      }
-    });
 
     return new Promise<JsonResponse>((resolve, reject) => {
       const parseBody = (raw: string, contentType: string): any => {
@@ -156,7 +162,7 @@ describe('mcp endpoint accept handling', () => {
         {
           hostname: '127.0.0.1',
           port,
-          path: '/mcp',
+          path,
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -259,5 +265,35 @@ describe('mcp endpoint accept handling', () => {
     expect(response.status).toBe(200);
     expect(response.body.jsonrpc).toBe('2.0');
     expect(response.body.result).toBeDefined();
+  });
+
+  it('handles MCP requests sent through a base path used by reverse proxies', async () => {
+    const started = await startServer();
+    context = started.context;
+    port = started.port;
+
+    const response = await sendMcpRequest({
+      path: '/sessions/test/skills/mcp',
+      headers: { Accept: '*/*' }
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.jsonrpc).toBe('2.0');
+    expect(response.body.result).toBeDefined();
+  });
+
+  it('returns a parse error for invalid JSON bodies without hanging the request', async () => {
+    const started = await startServer();
+    context = started.context;
+    port = started.port;
+
+    const response = await sendMcpRequest({
+      headers: { Accept: 'application/json' },
+      payload: '{"jsonrpc":' // malformed JSON
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body?.error?.code).toBe(-32700);
+    expect(response.body?.error?.message).toContain('Parse error');
   });
 });

@@ -279,6 +279,32 @@ const normalizeAcceptHeader = (req: IncomingMessage): void => {
   req.headers.accept = acceptValues.join(', ');
 };
 
+const MAXIMUM_BODY_SIZE_BYTES = 4 * 1024 * 1024; // 4MB to align with transport defaults
+
+const parseJsonBody = async (req: IncomingMessage): Promise<unknown> => {
+  const chunks: Buffer[] = [];
+  let totalSize = 0;
+
+  for await (const chunk of req) {
+    const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalSize += bufferChunk.length;
+
+    if (totalSize > MAXIMUM_BODY_SIZE_BYTES) {
+      throw new Error('Request entity too large');
+    }
+
+    chunks.push(bufferChunk);
+  }
+
+  const rawBody = Buffer.concat(chunks).toString('utf-8');
+
+  if (!rawBody.trim()) {
+    return undefined;
+  }
+
+  return JSON.parse(rawBody);
+};
+
 function createHttpServer(
   transport: StreamableHTTPServerTransport,
   config: Config
@@ -311,7 +337,21 @@ function createHttpServer(
       }
 
       normalizeAcceptHeader(req);
-      await transport.handleRequest(req, res);
+      try {
+        const parsedBody = req.method === 'POST' ? await parseJsonBody(req) : undefined;
+        await transport.handleRequest(req, res, parsedBody);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown parse error';
+        res
+          .writeHead(400, { 'Content-Type': 'application/json' })
+          .end(
+            JSON.stringify({
+              jsonrpc: '2.0',
+              error: { code: -32700, message: 'Parse error', data: message },
+              id: null
+            })
+          );
+      }
       return;
     }
 
