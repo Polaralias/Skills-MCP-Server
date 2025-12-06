@@ -18,6 +18,22 @@ type JsonResponse = {
   body: any;
 };
 
+const stopServer = async (context: ServerContext | null): Promise<void> => {
+  if (!context) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    context.httpServer.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+};
+
 const startServer = async (): Promise<{ context: ServerContext; port: number }> => {
   const context = await createServer(TEST_CONFIG);
   await new Promise<void>((resolve) => {
@@ -58,18 +74,8 @@ describe('well-known endpoints', () => {
   let context: ServerContext | null = null;
 
   afterEach(async () => {
-    if (context) {
-      await new Promise<void>((resolve, reject) => {
-        context?.httpServer.close((error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve();
-        });
-      });
-      context = null;
-    }
+    await stopServer(context);
+    context = null;
   });
 
   it('returns the MCP manifest with HTTP transport details', async () => {
@@ -108,5 +114,150 @@ describe('well-known endpoints', () => {
     expect(body.server.healthCheck).toBe(
       `http://127.0.0.1:${started.port}${basePath}/health`
     );
+  });
+});
+
+describe('mcp endpoint accept handling', () => {
+  let context: ServerContext | null = null;
+  let port: number | null = null;
+
+  const sendMcpRequest = async (
+    headers: Record<string, string | undefined> = {}
+  ): Promise<JsonResponse> => {
+    if (!port) {
+      throw new Error('Server port not available');
+    }
+
+    const payload = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 'test',
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'vitest', version: '1.0.0' }
+      }
+    });
+
+    return new Promise<JsonResponse>((resolve, reject) => {
+      const parseBody = (raw: string, contentType: string): any => {
+        if (!raw.trim()) {
+          return null;
+        }
+
+        if (contentType.includes('text/event-stream')) {
+          return JSON.parse(raw);
+        }
+
+        return JSON.parse(raw);
+      };
+
+      const request = http.request(
+        {
+          hostname: '127.0.0.1',
+          port,
+          path: '/mcp',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(payload).toString(),
+            ...headers
+          }
+        },
+        (res) => {
+          const contentType = res.headers['content-type'] ?? '';
+          let resolved = false;
+
+          const finish = (raw: string) => {
+            if (resolved) {
+              return;
+            }
+            resolved = true;
+
+            try {
+              resolve({
+                status: res.statusCode ?? 0,
+                body: parseBody(raw, contentType as string)
+              });
+            } catch (error) {
+              reject(error);
+            }
+
+            res.destroy();
+          };
+
+          res.on('data', (chunk) => {
+            const text = chunk.toString();
+
+            if (contentType.includes('text/event-stream')) {
+              const dataLine = text
+                .split(/\r?\n/)
+                .find((line) => line.startsWith('data:'));
+
+              if (dataLine) {
+                finish(dataLine.replace(/^data:\s*/, ''));
+              }
+            } else {
+              finish(text);
+            }
+          });
+
+          res.on('end', () => finish(''));
+          res.on('error', reject);
+        }
+      );
+
+      request.setTimeout(5000, () => {
+        request.destroy(new Error('Request timed out'));
+      });
+
+      request.on('error', reject);
+      request.write(payload);
+      request.end();
+    });
+  };
+
+  afterEach(async () => {
+    await stopServer(context);
+    context = null;
+    port = null;
+  });
+
+  it('responds to MCP requests with wildcard accept headers', async () => {
+    const started = await startServer();
+    context = started.context;
+    port = started.port;
+
+    const response = await sendMcpRequest({ Accept: '*/*' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.jsonrpc).toBe('2.0');
+    expect(response.body.result).toBeDefined();
+  });
+
+  it('responds to MCP requests when only json is accepted', async () => {
+    const started = await startServer();
+    context = started.context;
+    port = started.port;
+
+    const response = await sendMcpRequest({ Accept: 'application/json' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.jsonrpc).toBe('2.0');
+    expect(response.body.result).toBeDefined();
+  });
+
+  it('responds to MCP requests with explicit streaming accept header', async () => {
+    const started = await startServer();
+    context = started.context;
+    port = started.port;
+
+    const response = await sendMcpRequest({
+      Accept: 'application/json, text/event-stream'
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.jsonrpc).toBe('2.0');
+    expect(response.body.result).toBeDefined();
   });
 });
