@@ -23,6 +23,6 @@ COPY --from=production-deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/.well-known ./.well-known
-RUN mkdir -p /app/skills/public /app/skills/private /app/data
+RUN mkdir -p /app/data
 EXPOSE 3000
-CMD ["node", "./dist/server/index.js"]
+CMD ["node", "./dist/server/index.ts"]
