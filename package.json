@@ -15,8 +15,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "dev": "tsx src/server/index.ts",
-    "start": "node dist/server/index.js",
-    "start:stdio": "node dist/server/index.js",
+    "start": "node dist/src/server/index.js",
+    "start:stdio": "node dist/src/server/index.js",
     "cli": "tsx scripts/cli.ts"
   },
   "keywords": [
