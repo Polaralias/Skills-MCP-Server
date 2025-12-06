@@ -148,7 +148,6 @@ export const createServer = async (
   transport.onerror = (error) => {
     console.error('MCP transport error', error);
   };
-  await transport.start();
 
   const httpServer = createHttpServer(transport, config);
 
