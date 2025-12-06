@@ -181,7 +181,8 @@ export const createServer = async (
   })();
 
   const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID()
+    sessionIdGenerator: () => randomUUID(),
+    enableJsonResponse: true
   });
 
   await server.connect(transport);

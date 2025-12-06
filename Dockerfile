@@ -15,4 +15,4 @@ RUN mkdir -p /app/skills/public /app/skills/private /app/data
 
 EXPOSE 3000
 
-CMD ["node", "dist/server/index.js"]
+CMD ["node", "dist/src/server/index.js"]
