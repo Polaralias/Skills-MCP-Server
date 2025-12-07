@@ -12,9 +12,13 @@ export function createMcpServer(skills: Skill[]) {
   for (const skill of skills) {
     const toolName = `skill_${skill.id}`;
     // @ts-ignore: TS2589 excessive depth
-    server.tool(
+    server.registerTool(
       toolName,
-      {},
+      {
+        title: skill.title,
+        description: skill.description || `Skill: ${skill.title}`,
+        inputSchema: {},
+      },
       async () => {
         return {
           content: [
@@ -29,11 +33,15 @@ export function createMcpServer(skills: Skill[]) {
   }
 
   // @ts-ignore: TS2589 excessive depth
-  server.tool(
+  server.registerTool(
     "search_skills",
     {
-      query: z.string().describe("Search query or keywords"),
-      limit: z.number().int().positive().optional().describe("Maximum number of primary matches to return"),
+      title: "Search Skills",
+      description: "Search SKILL.md files by keyword and return ranked matches",
+      inputSchema: {
+        query: z.string().describe("Search query or keywords"),
+        limit: z.number().int().positive().optional().describe("Maximum number of primary matches to return"),
+      },
     },
     async ({ query, limit }) => {
       const { primaryMatches, alternativeMatches } = searchSkills(skills, query, limit ?? 5);
