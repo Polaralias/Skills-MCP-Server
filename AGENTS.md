@@ -26,4 +26,8 @@ Before producing work, the agent should fully understand the referenced skill do
 
 - **`mcp-builder`** – Guide for creating high-quality MCP (Model Context Protocol) servers that enable LLMs to interact with external services through well-designed tools. Use when building MCP servers to integrate external APIs or services, whether in Python (FastMCP) or Node/TypeScript (MCP SDK).
 - **`skill-creator`** – Guide for creating effective skills. This skill should be used when users want to create a new skill (or update an existing skill) that extends Claude's capabilities with specialized knowledge, workflows, or tool integrations.
-- **`template-skill`** – Replace with description of the skill and when Claude should use it.
+
+## Next Steps
+
+- **Deployment**: Deploy the MCP server to Smithery as a custom container. Follow the instructions in `docs/technical_specification.md`.
+- **Maintenance**: Regularly update the skills in `skills/` and rebuild the Docker image to propagate changes.
