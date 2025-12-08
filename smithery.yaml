@@ -1,3 +1,5 @@
+# Smithery deployment configuration
+# See https://smithery.ai/docs/build/project-config/smithery-yaml
 runtime: "container"
 build:
   dockerfile: "Dockerfile"
