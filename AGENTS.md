@@ -29,5 +29,5 @@ Before producing work, the agent should fully understand the referenced skill do
 
 ## Next Steps
 
-- **Deployment**: Deploy the MCP server to Smithery as a custom container. Follow the instructions in `docs/technical_specification.md`.
+- **Deployment**: The code is ready for deployment. Please follow the instructions in `docs/deployment_guide.md` to deploy the MCP server to Smithery.
 - **Maintenance**: Regularly update the skills in `skills/` and rebuild the Docker image to propagate changes.
