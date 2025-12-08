@@ -29,13 +29,20 @@ This guide provides step-by-step instructions to deploy the Skills MCP Server to
 
 ## Step 2: Configure Smithery
 
+The repository includes a `smithery.yaml` file which defines the deployment configuration. Smithery should automatically detect this file.
+
 1.  Go to the Smithery web UI and create a new server.
-2.  Select **"Custom Container"** as the deployment type.
+2.  Connect your repository (if using GitHub integration) or select **"Custom Container"** as the deployment type.
 
 ## Step 3: Server Configuration
 
-Fill in the configuration details:
+If Smithery does not automatically pick up `smithery.yaml`, ensure the following settings are configured:
 
+*   **Runtime**: `container`
+*   **Build**: Use `Dockerfile` in root.
+*   **Start Command**: HTTP mode.
+
+Fill in the container image details:
 *   **Container Image**: The full URL of the image you just pushed (e.g., `ghcr.io/my-username/skills-mcp-server:latest`).
 *   **Registry Credentials**: If your registry is private, provide the necessary credentials.
 
