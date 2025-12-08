@@ -27,6 +27,13 @@ export function createMcpServer(skills: Skill[]) {
               text: skill.content,
             },
           ],
+          // @ts-ignore: 'data' is not in CallToolResult types but allowed by loose schema
+          data: {
+            id: skill.id,
+            title: skill.title,
+            description: skill.description,
+            tags: skill.tags,
+          },
         };
       }
     );
@@ -49,12 +56,14 @@ export function createMcpServer(skills: Skill[]) {
         content: [
           {
             type: "text",
-            text: JSON.stringify({
-              primaryMatches: primaryMatches.map(m => ({ id: m.id, title: m.title, description: m.description, score: m.score })),
-              alternativeMatches: alternativeMatches.map(m => ({ id: m.id, title: m.title, description: m.description, score: m.score }))
-            }, null, 2)
+            text: `Found ${primaryMatches.length} primary matches and ${alternativeMatches.length} alternative matches for query "${query}".`,
           },
         ],
+        // @ts-ignore: 'data' is not in CallToolResult types but allowed by loose schema
+        data: {
+          primaryMatches: primaryMatches.map(m => ({ id: m.id, title: m.title, description: m.description, score: m.score, tags: m.tags })),
+          alternativeMatches: alternativeMatches.map(m => ({ id: m.id, title: m.title, description: m.description, score: m.score, tags: m.tags })),
+        },
       };
     }
   );

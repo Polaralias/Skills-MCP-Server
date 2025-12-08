@@ -40,7 +40,8 @@ app.all("/mcp", async (req: Request, res: Response) => {
     });
 
     res.on("close", () => {
-       // Clean up if necessary
+      transport.close().catch(err => console.error("Error closing transport:", err));
+      server.close().catch(err => console.error("Error closing server:", err));
     });
 
     await server.connect(transport);
