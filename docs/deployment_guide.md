@@ -57,18 +57,17 @@ Set the following environment variables in the Smithery configuration:
 
 *   `TRANSPORT`: `http`
 *   `PORT`: `8080`
-*   `SKILLS_DIR`: `/app/skills` (Default location in the container).
 
 ## Step 6: Metadata
 
 *   **Name**: `Skills MCP Server`
-*   **Description**: `MCP server exposing markdown-based skills as tools.`
+*   **Description**: `MCP server exposing markdown-based skills as prompts and resources.`
 *   **Tags**: `skills`, `documentation`, `knowledge-base`
 
 ## Step 7: Verify Deployment
 
 Once deployed, use the Smithery playground to test the server:
 
-1.  Call `search_skills` with a query like "android" or "design".
-2.  Verify it returns relevant skills.
-3.  Call a specific skill tool (e.g., `skill_android-dev-standards`) and verify it returns the content.
+1.  Check `Prompts` list to see available skills (e.g., `android/dev-standards`).
+2.  Select a prompt and execute it to see the skill content.
+3.  Check `Resources` list to see available resources.

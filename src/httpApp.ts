@@ -7,7 +7,7 @@ import { Skill } from "./skills/types.js";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const SKILLS_DIR = process.env.SKILLS_DIR || "skills";
+const ROOT_DIR = process.env.ROOT_DIR || process.cwd();
 
 app.use(
   cors({
@@ -23,7 +23,7 @@ let cachedSkillsPromise: Promise<Skill[]> | null = null;
 
 async function getSkills(): Promise<Skill[]> {
   if (!cachedSkillsPromise) {
-    cachedSkillsPromise = loadSkills(SKILLS_DIR);
+    cachedSkillsPromise = loadSkills(ROOT_DIR);
   }
   if (!cachedSkillsPromise) {
     throw new Error("Failed to load skills");
