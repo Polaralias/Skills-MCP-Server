@@ -13,7 +13,7 @@ app.use(
   cors({
     origin: "*",
     exposedHeaders: ["mcp-Session-Id", "mcp-protocol-version"],
-    allowedHeaders: ["Content-Type", "mcp-session-id"],
+    allowedHeaders: ["Content-Type", "mcp-session-id", "Authorization"],
   })
 );
 
