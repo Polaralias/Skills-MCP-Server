@@ -1,7 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import { Skill } from "./skills/types.js";
-import { searchSkills } from "./skills/search.js";
+import fs from "fs/promises";
 
 export function createMcpServer(skills: Skill[]) {
   const server = new McpServer({
@@ -10,63 +9,52 @@ export function createMcpServer(skills: Skill[]) {
   });
 
   for (const skill of skills) {
-    const toolName = `skill_${skill.id}`;
-    // @ts-ignore: TS2589 excessive depth
-    server.registerTool(
-      toolName,
-      {
-        title: skill.title,
-        description: skill.description || `Skill: ${skill.title}`,
-        inputSchema: {},
-      },
-      async () => {
-        return {
-          content: [
-            {
-              type: "text",
-              text: skill.content,
-            },
-          ],
-          // @ts-ignore: 'data' is not in CallToolResult types but allowed by loose schema
-          data: {
-            id: skill.id,
-            title: skill.title,
+    const promptName = `${skill.family}/${skill.id}`;
+
+    // Register Prompt
+    server.prompt(
+        promptName,
+        skill.description,
+        async () => {
+            const content = await fs.readFile(skill.promptPath, 'utf-8');
+            return {
+                messages: [
+                    {
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: content
+                        }
+                    }
+                ]
+            };
+        }
+    );
+
+    // Register Resource
+    const resourceUri = `resources://${skill.family}/${skill.id}`;
+
+    server.resource(
+        skill.title,
+        resourceUri,
+        {
             description: skill.description,
-            tags: skill.tags,
-          },
-        };
-      }
+            mimeType: "text/markdown"
+        },
+        async (uri) => {
+             const content = await fs.readFile(skill.resourcePath, 'utf-8');
+             return {
+                 contents: [
+                     {
+                         uri: uri.href,
+                         mimeType: "text/markdown",
+                         text: content
+                     }
+                 ]
+             };
+        }
     );
   }
-
-  // @ts-ignore: TS2589 excessive depth
-  server.registerTool(
-    "search_skills",
-    {
-      title: "Search Skills",
-      description: "Search SKILL.md files by keyword and return ranked matches",
-      inputSchema: {
-        query: z.string().describe("Search query or keywords"),
-        limit: z.number().int().positive().optional().describe("Maximum number of primary matches to return"),
-      },
-    },
-    async ({ query, limit }) => {
-      const { primaryMatches, alternativeMatches } = searchSkills(skills, query, limit ?? 5);
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Found ${primaryMatches.length} primary matches and ${alternativeMatches.length} alternative matches for query "${query}".`,
-          },
-        ],
-        // @ts-ignore: 'data' is not in CallToolResult types but allowed by loose schema
-        data: {
-          primaryMatches: primaryMatches.map(m => ({ id: m.id, title: m.title, description: m.description, score: m.score, tags: m.tags })),
-          alternativeMatches: alternativeMatches.map(m => ({ id: m.id, title: m.title, description: m.description, score: m.score, tags: m.tags })),
-        },
-      };
-    }
-  );
 
   return server;
 }

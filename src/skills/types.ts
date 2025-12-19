@@ -1,17 +1,10 @@
 export interface Skill {
+  family: string;
   id: string;
   title: string;
   description: string;
   tags: string[];
-  content: string;
-  path: string;
-}
-
-export interface SkillSearchMatch {
-  id: string;
-  title: string;
-  description: string;
-  tags: string[];
-  content: string;
-  score: number;
+  manifestPath: string;
+  promptPath: string;
+  resourcePath: string;
 }

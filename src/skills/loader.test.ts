@@ -2,75 +2,57 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { loadSkills } from './loader.js';
 import fs from 'fs/promises';
 import path from 'path';
-import { Skill } from './types.js';
 
 vi.mock('fs/promises');
 
 describe('loadSkills', () => {
-  const rootDir = '/mock/skills';
+  const rootDir = '/mock/root';
+  const manifestsDir = path.join(rootDir, 'manifests');
 
   beforeEach(() => {
     vi.resetAllMocks();
   });
 
   it('should load skills from nested directories', async () => {
-    const mockFiles = {
-      [rootDir]: [
-        { name: 'skill-a', isDirectory: () => true, isFile: () => false },
-        { name: 'skill-b', isDirectory: () => true, isFile: () => false },
-        { name: 'random.txt', isDirectory: () => false, isFile: () => true },
-      ],
-      [path.join(rootDir, 'skill-a')]: [
-        { name: 'SKILL.md', isDirectory: () => false, isFile: () => true },
-      ],
-      [path.join(rootDir, 'skill-b')]: [
-        { name: 'SKILL.md', isDirectory: () => false, isFile: () => true },
-      ],
-    };
-
-    const mockContent = {
-      [path.join(rootDir, 'skill-a', 'SKILL.md')]: `---
-title: Skill A
-description: Description A
-tags:
-  - tag1
-  - tag2
----
-# Skill A Content
-`,
-      [path.join(rootDir, 'skill-b', 'SKILL.md')]: `# Skill B
-Description B.
-`,
-    };
-
-    // Mock readdir
+    // Mock fs.readdir
     vi.mocked(fs.readdir).mockImplementation(async (dir) => {
-      const entries = mockFiles[dir as string] || [];
-      return entries as any;
+        if (dir === manifestsDir) {
+            return [
+                { name: 'android', isDirectory: () => true }
+            ] as any;
+        }
+        if (dir === path.join(manifestsDir, 'android')) {
+            return [
+                { name: 'dev-standards.json', isFile: () => true }
+            ] as any;
+        }
+        return [] as any;
     });
 
-    // Mock readFile
+    // Mock fs.readFile
     vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
-      return mockContent[filePath as string] || '';
+        if ((filePath as string).endsWith('dev-standards.json')) {
+            return JSON.stringify({
+                title: 'Android Dev Standards',
+                description: 'Best practices',
+                tags: ['android', 'kotlin']
+            });
+        }
+        return '';
     });
 
-    // Mock access
+    // Mock fs.access
     vi.mocked(fs.access).mockResolvedValue(undefined);
 
     const skills = await loadSkills(rootDir);
 
-    expect(skills).toHaveLength(2);
-
-    const skillA = skills.find(s => s.id === 'skill-a');
-    expect(skillA).toBeDefined();
-    expect(skillA?.title).toBe('Skill A');
-    expect(skillA?.description).toBe('Description A');
-    expect(skillA?.tags).toEqual(['tag1', 'tag2']);
-
-    const skillB = skills.find(s => s.id === 'skill-b');
-    expect(skillB).toBeDefined();
-    expect(skillB?.title).toBe('Skill B');
-    expect(skillB?.description).toBe('Description B.');
-    expect(skillB?.tags).toEqual([]);
+    expect(skills).toHaveLength(1);
+    const skill = skills[0];
+    expect(skill.id).toBe('dev-standards');
+    expect(skill.family).toBe('android');
+    expect(skill.title).toBe('Android Dev Standards');
+    expect(skill.manifestPath).toBe(path.join(manifestsDir, 'android', 'dev-standards.json'));
+    expect(skill.promptPath).toBe(path.join(rootDir, 'prompts', 'android', 'dev-standards.md'));
+    expect(skill.resourcePath).toBe(path.join(rootDir, 'resources', 'android', 'dev-standards.md'));
   });
 });

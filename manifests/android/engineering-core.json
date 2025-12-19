@@ -1,0 +1,4 @@
+{
+  "description": "This skill is used to implement Android features within the existing Kotlin, Compose, Room, Hilt and Navigation architecture, including data, navigation and background work.",
+  "title": "android-engineering-core"
+}
