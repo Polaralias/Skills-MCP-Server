@@ -31,6 +31,10 @@ async function getSkills(): Promise<Skill[]> {
   return cachedSkillsPromise;
 }
 
+app.get("/health", (req: Request, res: Response) => {
+  res.sendStatus(200);
+});
+
 app.all("/mcp", async (req: Request, res: Response) => {
   try {
     const skills = await getSkills();
